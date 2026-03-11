@@ -349,10 +349,11 @@ This project is intentionally framed as a **planning-and-recommendation system**
 ```json
 {
   "intent": "commute_plan",
+  "origin_source": "home",
   "destination_source": "calendar_event",
+  "origin_text": null,
   "destination_text": null,
   "event_query": "dinner with Mom",
-  "origin": "home",
   "arrival_time": null,
   "arrival_window_start": null,
   "arrival_window_end": null,
@@ -362,6 +363,8 @@ This project is intentionally framed as a **planning-and-recommendation system**
 ```
 
 **Why LLM-based parsing:** Natural-language commute requests are fuzzy and under-specified. This is an appropriate use of a model with schema-constrained output. Rules-only approaches are brittle for fuzzy event names, implicit timing constraints, and leave-now questions.
+
+**Timestamp convention:** Any timestamps produced by the planner (e.g. `arrival_time`, `arrival_window_start/end`) must be **timezone-aware** datetimes. The planner should not perform time arithmetic; it should only interpret user constraints into structured fields.
 
 ---
 
@@ -410,7 +413,26 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 
 **Provider variants:** `MockMapsProvider`, `GoogleMapsProvider`
 
+**Data model:** Maps inputs/outputs use a `PlaceRef` object (label/address/provider ID) rather than raw strings. This keeps place identity stable across providers and historical records, which improves Week 2 retrieval and evaluation.
+
 **Why provider-based:** Maps data is deterministic and externally grounded. It must come from a provider, not from LLM inference.
+
+---
+
+### 9.4.1 Resolved Commute (Grounded State)
+
+**Purpose:** Represent the grounded, post-orchestration commute that is ready for deterministic recommendation and validation.
+
+**Why this exists:** `CommuteIntent` is interpretive (planner output) and may be ambiguous or incomplete. `ResolvedCommute` is the deterministic handoff point after resolving origin/destination to concrete `PlaceRef`s and attaching tool-grounded context (calendar event, maps ETA).
+
+**Fields (conceptual):**
+
+- `origin: PlaceRef`
+- `destination: PlaceRef`
+- `event: CalendarEvent | null` (when destination is calendar-derived)
+- `route: RouteEstimate | null`
+- `arrival_time | arrival_window_start | arrival_window_end` (timezone-aware)
+- `risk_mode`
 
 ---
 
@@ -422,19 +444,28 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 
 ```json
 {
-  "date": "2026-02-12",
-  "weekday": "Thursday",
-  "origin": "Home",
-  "destination": "Sunnyvale Office",
+  "origin": {
+    "label": "Home",
+    "address": null,
+    "provider_place_id": null
+  },
+  "destination": {
+    "label": "Sunnyvale Office",
+    "address": null,
+    "provider_place_id": null
+  },
   "event_type": "office_commute",
-  "planned_arrival": "09:30",
-  "departure_time": "08:42",
+  "planned_arrival_time": "2026-02-12T09:30:00-08:00",
+  "departure_time": "2026-02-12T08:42:00-08:00",
+  "arrival_time": null,
   "actual_duration_min": 41,
   "late": false,
   "condition_tags": ["rush_hour", "light_rain"],
   "notes": "Traffic heavier than usual near final exit"
 }
 ```
+
+**Timestamp convention:** Historical timestamps are stored as **timezone-aware** datetimes (e.g. ISO-8601 with offset). This avoids ambiguity in retrieval features (weekday/time-band) and offline evaluation.
 
 **Storage design:**
 
