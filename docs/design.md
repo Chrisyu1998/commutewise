@@ -1,0 +1,775 @@
+# CommuteWise: Engineering Design Document
+
+**Author:** Chris Yu  
+**Status:** Draft  
+**Date:** March 7, 2026
+
+---
+
+## Table of Contents
+
+1. [TL;DR](#1-tldr)
+2. [Problem Statement](#2-problem-statement)
+3. [Goals](#3-goals)
+4. [Non-Goals](#4-non-goals)
+5. [Requirements](#5-requirements)
+6. [Proposed Solution](#6-proposed-solution)
+7. [High-Level Architecture](#7-high-level-architecture)
+8. [Core Design Decisions and Tradeoffs](#8-core-design-decisions-and-tradeoffs)
+9. [Detailed Design](#9-detailed-design)
+10. [Data Flow](#10-data-flow)
+11. [Evaluation Plan](#11-evaluation-plan)
+12. [Risks and Mitigations](#12-risks-and-mitigations)
+13. [Implementation Plan](#13-implementation-plan)
+14. [Success Metrics](#14-success-metrics)
+15. [Post-MVP Roadmap](#15-post-mvp-roadmap)
+16. [Final Recommendation](#16-final-recommendation)
+17. [Appendix](#appendix)
+
+---
+
+## 1. TL;DR
+
+CommuteWise is an AI-powered commute planning agent that answers natural-language queries like:
+
+- *"When should I leave for the office if I want to arrive between 10 and 11?"*
+- *"When should I leave for dinner with Mom?"*
+- *"Should I leave now?"*
+
+The system is built on five core pillars:
+
+| Pillar | Description |
+|--------|-------------|
+| **Calendar grounding** | Resolves destinations and deadlines from calendar context |
+| **Live travel data** | Fetches real-time ETAs via Maps API |
+| **Historical retrieval** | Hybrid RAG over prior commute episodes |
+| **Recommendation logic** | Deterministic departure-time computation with risk modes |
+| **Offline evaluation** | Measurable metrics over a golden scenario dataset |
+
+The MVP is scoped to 3 weeks of work and is intentionally designed to demonstrate strong AI product engineering signals relevant to: tool use, context engineering, retrieval, ranking, reliability, and evaluation.
+
+---
+
+## 2. Problem Statement
+
+Deciding when to leave for an event today requires repeated manual checking of Maps and mental estimation of traffic risk and time buffers. This is inefficient because the optimal departure time depends on multiple contextual factors simultaneously:
+
+- Destination and current route conditions
+- Arrival deadline or target window
+- Historical traffic variability on similar trips
+- Event metadata (type, urgency, flexibility)
+- User preference for risk tolerance vs. convenience
+
+A useful AI system should answer not just *"how long is the drive"* but:
+
+> **What is the best departure time given my goal, context, and uncertainty?**
+
+This is a well-scoped project because it is:
+
+- A real, recurring user problem
+- Grounded in external tool APIs (not pure LLM inference)
+- Naturally suited for retrieval and ranking
+- Evaluable offline with measurable metrics
+- Small enough to build a strong MVP in 3 weeks
+
+---
+
+## 3. Goals
+
+### 3.1 Product Goals
+
+- Recommend a specific departure time for a user commute query
+- Support both recurring destinations and calendar-linked destinations
+- Return a concise, grounded explanation for the recommendation
+- Handle ambiguous inputs safely via targeted clarification
+- Support configurable risk modes: **aggressive**, **balanced**, and **safest**
+
+### 3.2 System Goals
+
+- Demonstrate structured LLM-based intent parsing
+- Demonstrate tool orchestration across Calendar and Maps providers
+- Demonstrate hybrid retrieval over historical commute cases
+- Demonstrate ranking and recommendation logic over multiple candidates
+- Demonstrate deterministic guardrails around LLM outputs
+- Demonstrate offline evaluation with measurable metrics
+
+### 3.3 Project Goals
+
+This project should signal the ability to build AI systems, not just LLM demos. Specifically, it should demonstrate:
+
+- Context engineering
+- Tool-grounded reasoning
+- Retrieval and reranking
+- Reliability-minded system design
+- Evaluation-first iteration
+- Good judgment on when to use models vs. deterministic logic
+
+---
+
+## 4. Non-Goals
+
+The following are explicitly **out of scope** for the MVP:
+
+- Training a custom traffic prediction model
+- Fine-tuning the main LLM
+- Mobile app development
+- Multimodal inputs
+- Large-scale production infrastructure
+- Always-on background monitoring
+- Multi-user support
+- Long-term personalization
+- MCP as the primary integration layer
+
+These may be explored post-MVP.
+
+---
+
+## 5. Requirements
+
+### 5.1 Functional Requirements
+
+The system must:
+
+- Parse natural-language commute queries into structured intent
+- Resolve destination from one of: explicit text, default office location, or calendar event
+- Retrieve current route and ETA information from a Maps provider
+- Retrieve relevant historical commute cases via hybrid retrieval
+- Produce one or more candidate departure recommendations
+- Select a final recommendation based on user preference and risk mode
+- Validate that the recommendation is feasible
+- Return a grounded, concise explanation
+- Request clarification when required information is missing or ambiguous
+
+### 5.2 Non-Functional Requirements
+
+| Property | Description |
+|----------|-------------|
+| **Reliable** | Avoid contradictory or unsafe scheduling outputs |
+| **Grounded** | Rely on external tool APIs for non-language facts |
+| **Explainable** | Surface the evidence behind every recommendation |
+| **Testable** | Support offline replay with mock providers |
+| **Modular** | Support swappable mock and real providers |
+| **Scoped** | Realistically implementable in 3 weeks |
+
+---
+
+## 6. Proposed Solution
+
+### 6.1 Summary
+
+CommuteWise is a modular AI planning system that:
+
+1. Parses a user request into structured intent
+2. Resolves event and destination context from calendar
+3. Queries Maps for live ETA
+4. Retrieves similar historical commute cases
+5. Computes candidate departure strategies
+6. Validates the final recommendation
+7. Generates a grounded, concise natural-language response
+
+### 6.2 Why This Framing
+
+This project is intentionally framed as a **planning-and-recommendation system**, not a traffic forecasting model. That is the right tradeoff because:
+
+- The user value is a **recommendation**, not a raw prediction
+- Model training is not necessary to demonstrate AI engineering skill (personal goal)
+- This scope is feasible in 3 weeks
+
+---
+
+## 7. High-Level Architecture
+
+```
+┌─────────────────────┐
+│    User Interface   │
+│   CLI / Streamlit   │
+└──────────┬──────────┘
+           │
+           ▼
+┌──────────────────────────┐
+│  Planner / Intent Parser │
+│  · parse task            │
+│  · extract slots         │
+│  · detect ambiguity      │
+└────────────┬─────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│  Orchestrator / State    │
+│  Graph                   │
+│  · manage workflow       │
+│  · invoke tools          │
+│  · handle branching      │
+└──────┬───────────────────┘
+       │              │
+       ▼              ▼
+┌────────────┐   ┌─────────────┐
+│  Calendar  │   │  Maps / ETA │
+│  Provider  │   │  Provider   │
+└─────┬──────┘   └──────┬──────┘
+      │                 │
+      └────────┬─────────┘
+               │
+               ▼
+       ┌───────────────┐
+       │    History    │
+       │   Retriever   │
+       │  (Hybrid RAG) │
+       └───────┬───────┘
+               │
+               ▼
+       ┌───────────────┐
+       │    Context    │
+       │   Assembler   │
+       └───────┬───────┘
+               │
+               ▼
+       ┌───────────────┐
+       │ Recommendation│
+       │    Engine     │
+       └───────┬───────┘
+               │
+               ▼
+       ┌───────────────┐
+       │   Guardrail / │
+       │   Validator   │
+       └───────┬───────┘
+               │
+               ▼
+       ┌───────────────┐
+       │   Response    │
+       │   Generator   │
+       └───────────────┘
+```
+
+---
+
+## 8. Core Design Decisions and Tradeoffs
+
+### 8.1 Why No Fine-Tuning
+
+**Decision:** Do not fine-tune the main model for the MVP.
+
+**Rationale:**
+
+- Insufficient labeled data for meaningful fine-tuning
+- Likely failure modes are system-level, not model-knowledge-level
+- Prompt design, retrieval, schemas, and guardrails offer higher ROI
+
+**Alternatives considered:**
+
+- *Fine-tune intent parser* — could improve parsing consistency, but likely unnecessary with structured outputs and few-shot examples
+- *Fine-tune response generator* — low value; explanation style is not the hardest problem
+
+**Conclusion:** Fine-tuning is deferred unless evaluation reveals a narrow repeated error pattern that prompt and system changes cannot fix.
+
+---
+
+### 8.2 Why Prompt Engineering Is Included
+
+**Decision:** Use prompt engineering in bounded, high-value parts of the system only.
+
+| ✅ Good uses | ❌ Not used for |
+|-------------|-----------------|
+| Intent classification | Time arithmetic |
+| Slot extraction | Route duration estimation |
+| Ambiguity detection | Buffer calculations |
+| Context summarization | Hard feasibility checks |
+| Final explanation generation | — |
+| Optional LLM judge prompt | — |
+
+**Rationale:** This split demonstrates disciplined model usage — LLM for interpretation and synthesis, deterministic logic for correctness-sensitive computation.
+
+---
+
+### 8.3 Why Direct APIs Over MCP
+
+**Decision:** Use direct provider wrappers for Google Calendar and Google Maps in the MVP.
+
+**Rationale:** Direct APIs are better for MVP because they:
+
+- Reduce implementation overhead
+- Simplify mocking and offline testing
+- Provide stronger control over request/response shapes
+- Avoid unnecessary abstraction for a small number of tools
+
+**Alternatives considered:**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| MCP-first approach | Agent platform flavor; standardized tool boundary | Extra complexity; lower ROI for a 3-week project; no material improvement to recommendation quality |
+
+**Conclusion:** Use direct APIs for MVP. Keep tool contracts clean so an MCP layer can be added post-MVP.
+
+---
+
+### 8.4 Why Embeddings Are Included
+
+**Decision:** Use embeddings selectively.
+
+| ✅ Included for | ❌ Not included for |
+|-----------------|---------------------|
+| Fuzzy calendar event resolution | Deterministic route logic |
+| Historical commute retrieval | Scheduling arithmetic |
+| — | Validation |
+| — | Every calendar operation |
+
+**Rationale:** Embeddings are most valuable where semantic matching matters.
+
+---
+
+### 8.5 Why No Offline LLM Inference Over All Calendar Events
+
+**Decision:** Prefetch and cache upcoming calendar events, but do not pre-run the LLM on every event.
+
+**Rationale:**
+
+- Weekly calendar size is small; query-time resolution is cheap
+- Full precomputation adds complexity without strong benefit
+
+**Chosen design:**
+
+- Fetch the next 7 days of events
+- Normalize and cache event metadata
+- Optionally embed title / location / description
+- Resolve the relevant event at query time
+
+---
+
+## 9. Detailed Design
+
+### 9.1 Planner / Intent Parser
+
+**Purpose:** Convert user input into structured intent and extracted fields.
+
+**Example:**
+
+*Input:* "When should I leave for dinner with Mom?"
+
+```json
+{
+  "intent": "commute_plan",
+  "destination_source": "calendar_event",
+  "destination_text": null,
+  "event_query": "dinner with Mom",
+  "origin": "home",
+  "arrival_time": null,
+  "arrival_window_start": null,
+  "arrival_window_end": null,
+  "risk_mode": "balanced",
+  "missing_fields": []
+}
+```
+
+**Why LLM-based parsing:** Natural-language commute requests are fuzzy and under-specified. This is an appropriate use of a model with schema-constrained output. Rules-only approaches are brittle for fuzzy event names, implicit timing constraints, and leave-now questions.
+
+---
+
+### 9.2 Orchestrator
+
+**Purpose:** Manage the workflow and branch between tool calls, clarifications, and validation.
+
+**Design:** State-machine / graph approach.
+
+**Why this design:** The workflow naturally branches across several dimensions:
+
+- Explicit destination vs. calendar event
+- Single event match vs. ambiguous match
+- Sufficient information vs. clarification needed
+- Normal recommendation vs. low-confidence path
+
+A graph/state-machine structure is significantly easier to debug and evaluate than a single long prompt.
+
+---
+
+### 9.3 Calendar Provider
+
+**Responsibilities:**
+
+- Fetch upcoming events
+- Normalize event metadata
+- Resolve user references to specific events
+
+**Provider variants:** `MockCalendarProvider`, `GoogleCalendarProvider`
+
+**Event resolution strategy:**
+
+1. Filter candidate events by date window
+2. Apply lexical / fuzzy matching
+3. Apply embedding similarity
+4. Request clarification if candidate confidence scores are too close
+
+---
+
+### 9.4 Maps Provider
+
+**Responsibilities:**
+
+- Return ETA for origin → destination
+- Optionally return route metadata
+
+**Provider variants:** `MockMapsProvider`, `GoogleMapsProvider`
+
+**Why provider-based:** Maps data is deterministic and externally grounded. It must come from a provider, not from LLM inference.
+
+---
+
+### 9.5 Historical Commute Store
+
+**Purpose:** Store prior commute episodes for retrieval and replay.
+
+**Example record:**
+
+```json
+{
+  "date": "2026-02-12",
+  "weekday": "Thursday",
+  "origin": "Home",
+  "destination": "Sunnyvale Office",
+  "event_type": "office_commute",
+  "planned_arrival": "09:30",
+  "departure_time": "08:42",
+  "actual_duration_min": 41,
+  "late": false,
+  "condition_tags": ["rush_hour", "light_rain"],
+  "notes": "Traffic heavier than usual near final exit"
+}
+```
+
+**Storage design:**
+
+- Structured storage for metadata (hard constraint filtering)
+- Vector store for semantic retrieval (fuzzy similarity)
+
+---
+
+### 9.6 History Retriever (Hybrid RAG)
+
+**Purpose:** Retrieve similar commute cases that inform the current recommendation.
+
+**Pipeline:**
+
+1. Metadata filtering (hard constraints)
+2. Vector similarity retrieval
+3. Reranking
+4. Select top 3–5 cases
+
+**Reranking features:**
+
+| Feature | Weight |
+|---------|--------|
+| Route match | High |
+| Weekday similarity | Medium |
+| Time-band similarity | Medium |
+| Condition similarity | Medium |
+| Recency | Low |
+| Same event type | Low |
+
+**Why hybrid retrieval:** Metadata-only is too rigid. Vector-only is too noisy. Hybrid retrieval is the best tradeoff for this use case.
+
+---
+
+### 9.7 Context Assembler
+
+**Purpose:** Assemble the minimum useful context for the recommendation stage.
+
+**Inputs:**
+
+- Parsed request
+- Resolved event info
+- Maps ETA
+- Retrieved commute cases
+- Risk mode
+- Uncertainty notes
+
+**Why explicit assembly:** This avoids passing raw tool output dumps into the model and keeps the system inspectable and debuggable.
+
+---
+
+### 9.8 Recommendation Engine
+
+**Purpose:** Compute departure time recommendations.
+
+**Output candidates:**
+
+| Option | Strategy |
+|--------|----------|
+| **Aggressive** | Minimal buffer; optimistic traffic assumption |
+| **Balanced** | Moderate historical adjustment + moderate buffer |
+| **Safest** | Stronger historical adjustment + larger buffer |
+
+**Design:** Fully deterministic logic.
+
+**Why deterministic:** Departure-time recommendation is correctness-sensitive. The system must not rely on free-form LLM reasoning for scheduling arithmetic.
+
+---
+
+### 9.9 Guardrail / Validator
+
+**Purpose:** Ensure the recommendation is feasible and internally consistent.
+
+**Checks performed:**
+
+- Arrival falls before deadline or within the target window
+- Minimum buffer threshold is met
+- Destination resolution confidence is sufficient
+- No key fields are missing
+- Explanation text does not contradict structured facts
+
+**Design:** Deterministic validation first; optional LLM judge second.
+
+**Why this design:** Hard constraints must be machine-checked, not model-guessed.
+
+---
+
+### 9.10 Response Generator
+
+**Purpose:** Produce a concise, grounded user-facing answer.
+
+**Example output:**
+
+> **Recommendation:** Leave at 5:10 PM.  
+> **Why:** Current ETA is 34 minutes, and similar Friday evening trips to this area typically run 8–12 minutes longer.  
+> **Confidence:** Medium.  
+> **Backup option:** If you want lower lateness risk, leave by 5:00 PM.
+
+**Why use an LLM here:** The facts are already fixed by the upstream components, so the model is only being used for readability and polish — a low-risk, high-value application.
+
+---
+
+## 10. Data Flow
+
+### 10.1 Office Commute
+
+*"When should I leave for the office if I want to arrive between 10 and 11?"*
+
+1. Planner extracts office destination + arrival window
+2. Orchestrator resolves office config
+3. Maps provider returns live ETA
+4. History retriever returns similar office commute cases
+5. Recommendation engine computes candidates
+6. Validator checks feasibility
+7. Response generator returns final answer
+
+### 10.2 Calendar Event
+
+*"When should I leave for dinner with Mom?"*
+
+1. Planner identifies calendar event query
+2. Calendar provider resolves likely event
+3. Maps provider returns route ETA
+4. History retriever returns similar evening commute cases
+5. Recommendation engine computes recommendation
+6. Validator checks feasibility
+7. Response generator returns final answer
+
+### 10.3 Clarification Flow
+
+*"When should I leave for lunch?"*
+
+1. Planner identifies likely event-based commute request
+2. Calendar provider finds multiple matching lunch events
+3. System surfaces a targeted clarification question
+4. User clarifies
+5. Normal flow resumes from step 3 of the Calendar Event flow
+
+---
+
+## 11. Evaluation Plan
+
+### 11.1 Why Evaluation Matters
+
+Without evaluation, this project risks looking like a demo. With evaluation, it demonstrates real AI engineering maturity and provides a principled basis for iteration.
+
+### 11.2 Golden Dataset
+
+**Target size:** 40–60 scenarios
+
+**Scenario categories:**
+
+| Category | Description |
+|----------|-------------|
+| Office commute | Standard weekday office trip |
+| Dinner event | Calendar-linked evening event |
+| Leave-now flow | Real-time departure decision |
+| Ambiguous event name | Multiple calendar matches |
+| Missing location | Destination requires clarification |
+| Tight arrival window | High-stakes deadline |
+| Short-trip edge case | Very short travel time |
+| Conflicting history vs. live ETA | Historical and live data disagree |
+| Fuzzy event phrasing | Informal or ambiguous event references |
+
+**Each scenario includes:**
+
+- User query
+- Mock calendar data
+- Mock Maps response
+- Mock history data
+- Expected event resolution
+- Acceptable leave-time range
+- Expected clarification behavior (if applicable)
+
+### 11.3 Metrics
+
+**Product metrics:**
+
+| Metric | Description |
+|--------|-------------|
+| Task success rate | End-to-end correct recommendation |
+| Destination resolution accuracy | Correct event/location resolved |
+| Clarification correctness | Right question asked at right time |
+| Feasible-arrival rate | Recommendation produces on-time arrival |
+| Late-arrival rate | Recommendation results in lateness |
+
+**Quantitative metrics:**
+
+| Metric | Description |
+|--------|-------------|
+| MAE vs. reference leave time | Mean absolute error in minutes |
+| Minimum buffer compliance | % of recommendations meeting minimum buffer |
+| Average buffer | Mean buffer provided across scenarios |
+
+**System metrics:**
+
+- Invalid structured output rate
+- End-to-end latency (P50, P95)
+
+### 11.4 Ablations
+
+Evaluate each configuration sequentially to measure component contribution:
+
+1. Live ETA only (baseline)
+2. Live ETA + historical retrieval
+3. Reranking
+4. Guardrails
+5. Confidence and explanation improvements
+
+**Why:** Ablations prove which components actually contribute to recommendation quality — critical for demonstrating engineering rigor.
+
+---
+
+## 12. Risks and Mitigations
+
+| Risk | Mitigation |
+|------|-------------|
+| Event resolution quality is weak | Use layered matching: date filters → fuzzy match → embeddings → clarification fallback |
+| Retrieval adds limited value | Run ablations; improve dataset realism and reranking features |
+| Real APIs slow down the build | Build with mocks first; treat real integration as Week 3 polish |
+| Project looks too rules-based | Emphasize planner, retrieval, clarification, explanation generation, and eval results |
+| Scope expands too much | Keep MVP focused on office commute, event commute, leave-now, retrieval, and evaluation |
+
+---
+
+## 13. Implementation Plan
+
+### Week 1 — Build the Spine
+
+**Goal:** Get a full end-to-end flow working with mock providers.
+
+**Tasks:**
+
+- Create repo structure and define schemas
+- Build planner / intent parser
+- Build MockCalendarProvider and MockMapsProvider
+- Define office default config
+- Implement orchestrator
+- Implement recommendation engine v1
+- Build CLI or Streamlit demo
+
+**Exit criteria:**
+
+- Office commute flow works end-to-end
+- Simple event commute flow works
+- Demo exists
+
+### Week 2 — Add Intelligence
+
+**Goal:** Make the system context-aware and more robust.
+
+**Tasks:**
+
+- Define commute-history schema
+- Build historical dataset
+- Integrate embeddings
+- Build hybrid retrieval pipeline
+- Add reranking
+- Implement clarification logic
+- Improve explanation generation
+
+**Exit criteria:**
+
+- System retrieves relevant commute history
+- Ambiguous calendar queries trigger clarification
+- Explanation cites retrieved patterns
+
+### Week 3 — Add Quality and Polish
+
+**Goal:** Produce measurable results and make the project portfolio-ready.
+
+**Tasks:**
+
+- Create golden scenario dataset
+- Build eval runner and compute metrics
+- Implement guardrails
+- Add confidence scoring
+- Optionally integrate real Google Calendar
+- Polish README and demo materials
+
+**Exit criteria:**
+
+- Offline evaluation results exist
+- Ablation comparisons exist
+- Demo is polished enough for transfer discussions
+
+---
+
+## 14. Success Metrics
+
+The MVP is successful if:
+
+- It completes the main office and event commute flows end-to-end
+- It safely handles ambiguous inputs through targeted clarification
+- It shows measurable improvement over a live-ETA-only baseline
+- It has a clean, explainable, and defensible architecture
+- It demonstrates more than API calling — system design, retrieval, and eval rigor
+
+---
+
+## 15. Post-MVP Roadmap
+
+| Phase | Capability |
+|-------|------------|
+| Real integration polish | Richer OAuth flow, route alternatives, route matrix support |
+| MCP layer | Expose tool layer through MCP for broader agent platform use |
+| Personalization | Learn default risk preference; adapt buffer strategy from behavior |
+| Proactive assistance | "Leave by 5:05 PM" push notifications; traffic worsening warnings |
+| Probabilistic modeling | Formally estimate lateness risk; replace heuristics with learned distributions |
+| Feedback loop | Collect whether recommendations were followed; improve eval and ranking |
+
+---
+
+## 16. Final Recommendation
+
+CommuteWise should be built as a **context-aware planning agent** — not a traffic-prediction research project and not a thin LLM wrapper.
+
+The strongest version of this project clearly demonstrates:
+
+- Tool-grounded reasoning
+- Hybrid retrieval
+- Ranking and decision logic
+- Deterministic safety checks
+- Evaluation-driven improvement
+
+That is the version most likely to support a successful internal transfer into AI-related teams.
+
+---
+
+## Appendix
+
+### A. Short Pitch
+
+CommuteWise is an AI commute planning agent that answers *"When should I leave?"* by grounding to calendar context, live route data, and retrieved historical commute cases. It uses structured tool-calling, hybrid retrieval, reranking, deterministic validation, and offline evaluation to generate explainable recommendations under uncertainty.
+
+### B. Suggested Resume Bullet
+
+Built an LLM-powered commute planning agent that resolves destinations from calendar events, combines live ETA with retrieved historical commute cases, and recommends departure times under uncertainty using structured tool-calling, hybrid retrieval, reranking, deterministic guardrails, and an offline evaluation framework.
