@@ -153,7 +153,10 @@ class PlaceRef(BaseModel):
     Reference to a real-world place.
 
     Use this across providers and history records to keep place identity stable
-    for retrieval (Week 2) and evaluation.
+    for retrieval (Week 2) and evaluation. Office and home locations in
+    configuration (see `src.config`) are typically expressed as `PlaceRef`
+    instances. Time-related fields that reference these places should be
+    constructed via helpers in `src.time_utils` to ensure timezone-awareness.
     """
 
     label: Optional[str] = Field(
@@ -239,7 +242,8 @@ class CommuteHistoryRecord(BaseModel):
     """
     One past commute episode for retrieval and similarity comparison.
 
-    Stored in the history store; retrieved by the history retriever.
+    Stored in the history store; retrieved by the history retriever. Timestamps
+    should be timezone-aware, typically created via helpers in `src.time_utils`.
     """
 
     origin: PlaceRef = Field(..., description="Origin place reference.")
@@ -247,12 +251,21 @@ class CommuteHistoryRecord(BaseModel):
     event_type: str = Field(..., description="Category, e.g. 'office_commute'.")
     planned_arrival_time: Optional[datetime] = Field(
         default=None,
-        description="Planned/target arrival time for this commute (timezone-aware).",
+        description=(
+            "Planned/target arrival time for this commute (timezone-aware, "
+            "see `time_utils` for construction/parsing)."
+        ),
     )
-    departure_time: datetime = Field(..., description="Actual departure timestamp (timezone-aware).")
+    departure_time: datetime = Field(
+        ...,
+        description="Actual departure timestamp (timezone-aware).",
+    )
     arrival_time: Optional[datetime] = Field(
         default=None,
-        description="Actual arrival timestamp when known (timezone-aware).",
+        description=(
+            "Actual arrival timestamp when known (timezone-aware, built via "
+            "`time_utils`)."
+        ),
     )
     actual_duration_min: int = Field(..., ge=0, description="Actual travel duration in minutes.")
     late: bool = Field(..., description="Whether the user arrived late.")

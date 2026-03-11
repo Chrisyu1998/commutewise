@@ -415,6 +415,8 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 
 **Data model:** Maps inputs/outputs use a `PlaceRef` object (label/address/provider ID) rather than raw strings. This keeps place identity stable across providers and historical records, which improves Week 2 retrieval and evaluation.
 
+**Configuration and time helpers:** Default office/home locations are defined in `src/config.py`, and all timestamps flowing through providers should be normalized using helpers in `src/time_utils.py` to ensure they are timezone-aware.
+
 **Why provider-based:** Maps data is deterministic and externally grounded. It must come from a provider, not from LLM inference.
 
 ---

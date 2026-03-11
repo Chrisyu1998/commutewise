@@ -40,6 +40,7 @@ Build an AI-powered commute planning agent that recommends **when a user should 
 ### Structure and Style
 
 - **Clear folder structure** — e.g. `src/`, `tests/`, `docs/`; group by feature or layer, not by file type only.
+- **Configuration and time helpers** — Configuration lives in `src/config.py`; shared timezone-aware helpers live in `src/time_utils.py`.
 - **Docstrings** — Add docstrings for modules, classes, and public functions (Google or NumPy style is fine).
 - **Type hints** — Use type hints on function parameters and return values.
 - **Reasonable file size** — Prefer smaller, focused files over large monoliths. If a file grows beyond ~200–300 lines, consider splitting.
