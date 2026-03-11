@@ -144,6 +144,30 @@ class CalendarEvent(BaseModel):
         return _require_timezone(v)
 
 
+class EventResolutionResult(BaseModel):
+    """
+    Result of resolving a user query to calendar event(s).
+
+    When multiple candidates match (e.g. "lunch" → Lunch with Sarah, Lunch with Alex),
+    the orchestrator can ask the user: "Do you mean X or Y?" using candidate titles,
+    then call resolve_event again with the user's reply to get a single event.
+    """
+
+    candidates: list[CalendarEvent] = Field(
+        default_factory=list,
+        description="Matching events, sorted by score descending then start.",
+    )
+    scores: list[float] = Field(
+        default_factory=list,
+        description="Match score for each candidate (same order as candidates).",
+    )
+
+    @property
+    def needs_clarification(self) -> bool:
+        """True when there is more than one candidate; caller should ask user to disambiguate."""
+        return len(self.candidates) > 1
+
+
 # -----------------------------------------------------------------------------
 # Maps (provider output)
 # -----------------------------------------------------------------------------

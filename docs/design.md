@@ -2,7 +2,8 @@
 
 **Author:** Chris Yu  
 **Status:** Draft  
-**Date:** March 7, 2026
+**Date:** March 7, 2026  
+**Last updated:** March 11, 2026 — Calendar provider (EventResolutionResult, EventResolver, clarification flow), event→PlaceRef (destination helper).
 
 ---
 
@@ -389,18 +390,31 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 
 **Responsibilities:**
 
-- Fetch upcoming events
-- Normalize event metadata
-- Resolve user references to specific events
+- Fetch upcoming events in a time window
+- Normalize event metadata (from provider-specific shape to `CalendarEvent`)
+- Resolve user free-text references to one or more candidate events
 
 **Provider variants:** `MockCalendarProvider`, `GoogleCalendarProvider`
 
+**Interface:**
+
+- `get_events(start, end)` → `List[CalendarEvent]`: events that overlap the given window, sorted by start.
+- `resolve_event(query, events)` → `EventResolutionResult`: candidates and scores for the query. `EventResolutionResult` has `candidates`, `scores`, and `needs_clarification` (true when more than one candidate). This allows the orchestrator to ask "Do you mean X or Y?" and re-call `resolve_event` with the user's reply to get a single event.
+
+**Shared resolution (EventResolver):**
+
+- Resolution logic is implemented in a shared **EventResolver** component (`src/providers/event_resolver.py`). Both MockCalendarProvider and the future GoogleCalendarProvider delegate `resolve_event` to it (or to an injectable resolver), so behavior is consistent and testable. Week 2 can introduce an embedding-based resolver with the same contract without changing the provider interface.
+
 **Event resolution strategy:**
 
-1. Filter candidate events by date window
-2. Apply lexical / fuzzy matching
-3. Apply embedding similarity
-4. Request clarification if candidate confidence scores are too close
+1. Orchestrator calls `get_events(start, end)` to fetch candidates in the date window.
+2. Orchestrator calls `resolve_event(intent.event_query, events)`.
+3. If `result.needs_clarification` is true, surface a clarification question using candidate titles (e.g. "Do you mean Dinner with Mom or Dinner with Dad?"), then call `resolve_event(user_reply, events)` again to get a single event.
+4. Week 2: optionally add embedding similarity inside the resolver; the return type and clarification flow stay the same.
+
+**Mock and fixture data:**
+
+- Mock uses local fixture JSON in **Google Calendar API list response shape** (`calendar#events` with `items[]`). Each item is a Google event resource (`summary`, `start`/`end` as `dateTime` or `date` + `timeZone`, `location`, `status`, etc.). Events are normalized via `normalize_google_event` to `CalendarEvent`; cancelled events are skipped. This keeps the mock realistic for future Google provider integration.
 
 ---
 
@@ -435,6 +449,10 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 - `route: RouteEstimate | null`
 - `arrival_time | arrival_window_start | arrival_window_end` (timezone-aware)
 - `risk_mode`
+
+**Calendar-derived destination (event → PlaceRef):**
+
+- When the destination comes from a calendar event, the orchestrator turns the chosen `CalendarEvent` into a `PlaceRef` using the helper **`event_to_place_ref(event)`** in `src/destination.py`. It sets `label = event.title`, `address = event.location`, and `provider_place_id = None` until Maps/Geocoding integration can resolve a stable place ID (Week 2+). The orchestrator owns the decision to call this when building `ResolvedCommute` for calendar_event destinations.
 
 ---
 
@@ -588,23 +606,25 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 
 *"When should I leave for dinner with Mom?"*
 
-1. Planner identifies calendar event query
-2. Calendar provider resolves likely event
-3. Maps provider returns route ETA
-4. History retriever returns similar evening commute cases
-5. Recommendation engine computes recommendation
-6. Validator checks feasibility
-7. Response generator returns final answer
+1. Planner identifies calendar event query (`event_query` e.g. "dinner with Mom").
+2. Orchestrator calls calendar provider `get_events(start, end)`, then `resolve_event(event_query, events)`.
+3. If `EventResolutionResult.needs_clarification` is false and there is one candidate, use that event; set destination via `event_to_place_ref(event)`.
+4. Maps provider returns route ETA for that destination.
+5. History retriever returns similar commute cases.
+6. Recommendation engine computes recommendation.
+7. Validator checks feasibility.
+8. Response generator returns final answer.
 
 ### 10.3 Clarification Flow
 
 *"When should I leave for lunch?"*
 
-1. Planner identifies likely event-based commute request
-2. Calendar provider finds multiple matching lunch events
-3. System surfaces a targeted clarification question
-4. User clarifies
-5. Normal flow resumes from step 3 of the Calendar Event flow
+1. Planner identifies likely event-based commute request.
+2. Orchestrator calls `get_events`, then `resolve_event("lunch", events)`; result has multiple candidates and `needs_clarification` true.
+3. System surfaces a targeted clarification question using candidate titles, e.g. "Do you mean Lunch with Sarah or Lunch with Alex?"
+4. User replies (e.g. "Sarah" or "the first one").
+5. Orchestrator calls `resolve_event(user_reply, events)` again; result now has a single candidate.
+6. Normal flow resumes from step 3 of the Calendar Event flow (destination = `event_to_place_ref(chosen_event)`, then Maps, etc.).
 
 ---
 
@@ -685,7 +705,7 @@ Evaluate each configuration sequentially to measure component contribution:
 
 | Risk | Mitigation |
 |------|-------------|
-| Event resolution quality is weak | Use layered matching: date filters → fuzzy match → embeddings → clarification fallback |
+| Event resolution quality is weak | Use layered matching: date filters → shared EventResolver (lexical, then optionally embeddings) → clarification when `EventResolutionResult.needs_clarification`; re-call `resolve_event` with user reply to disambiguate. |
 | Retrieval adds limited value | Run ablations; improve dataset realism and reranking features |
 | Real APIs slow down the build | Build with mocks first; treat real integration as Week 3 polish |
 | Project looks too rules-based | Emphasize planner, retrieval, clarification, explanation generation, and eval results |
@@ -701,9 +721,11 @@ Evaluate each configuration sequentially to measure component contribution:
 
 **Tasks:**
 
-- Create repo structure and define schemas
+- Create repo structure and define schemas (including `EventResolutionResult` for resolution + clarification)
 - Build planner / intent parser
-- Build MockCalendarProvider and MockMapsProvider
+- Build MockCalendarProvider (get_events, resolve_event → EventResolutionResult) and MockMapsProvider
+- Build shared EventResolver (lexical matching; used by mock and future Google provider)
+- Add `event_to_place_ref` in `src/destination.py` for calendar-derived destination → PlaceRef
 - Define office default config
 - Implement orchestrator
 - Implement recommendation engine v1
@@ -712,7 +734,7 @@ Evaluate each configuration sequentially to measure component contribution:
 **Exit criteria:**
 
 - Office commute flow works end-to-end
-- Simple event commute flow works
+- Simple event commute flow works; ambiguous queries return EventResolutionResult with needs_clarification; clarification flow (ask "Do you mean X or Y?", re-resolve on reply) is supported
 - Demo exists
 
 ### Week 2 — Add Intelligence
@@ -723,16 +745,16 @@ Evaluate each configuration sequentially to measure component contribution:
 
 - Define commute-history schema
 - Build historical dataset
-- Integrate embeddings
+- Integrate embeddings (e.g. for EventResolver or historical retrieval)
 - Build hybrid retrieval pipeline
 - Add reranking
-- Implement clarification logic
+- Implement clarification logic in orchestrator (use EventResolutionResult.needs_clarification, prompt "Do you mean X or Y?", re-call resolve_event with user reply; optionally add confidence thresholds)
 - Improve explanation generation
 
 **Exit criteria:**
 
 - System retrieves relevant commute history
-- Ambiguous calendar queries trigger clarification
+- Ambiguous calendar queries trigger clarification using the existing EventResolutionResult contract
 - Explanation cites retrieved patterns
 
 ### Week 3 — Add Quality and Polish

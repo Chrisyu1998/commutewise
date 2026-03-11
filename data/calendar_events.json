@@ -1,0 +1,282 @@
+{
+  "kind": "calendar#events",
+  "etag": "\"p32of8/3k2j1m9x4y5z6a7b8c9d0e1f2g3h4i5\"",
+  "summary": "commutewise.mock@gmail.com",
+  "updated": "2026-03-10T12:00:00-07:00",
+  "timeZone": "America/Los_Angeles",
+  "accessRole": "owner",
+  "defaultReminders": [
+    { "method": "popup", "minutes": 10 },
+    { "method": "email", "minutes": 1440 }
+  ],
+  "items": [
+    {
+      "kind": "calendar#event",
+      "etag": "\"3300123456789000000\"",
+      "id": "evt-standup",
+      "status": "confirmed",
+      "htmlLink": "https://www.google.com/calendar/event?eid=ZXZ0LXN0YW5kdXA",
+      "created": "2026-03-01T08:00:00-07:00",
+      "updated": "2026-03-01T08:00:00-07:00",
+      "summary": "Team standup",
+      "description": "Daily team standup at 9 a.m.",
+      "creator": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "organizer": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "start": {
+        "dateTime": "2026-03-11T09:00:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      },
+      "end": {
+        "dateTime": "2026-03-11T09:15:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      }
+    },
+    {
+      "kind": "calendar#event",
+      "etag": "\"3300123456789000001\"",
+      "id": "evt-lunch-sarah",
+      "status": "confirmed",
+      "htmlLink": "https://www.google.com/calendar/event?eid=ZXZ0LWx1bmNoLXNhcmFo",
+      "created": "2026-03-02T09:00:00-07:00",
+      "updated": "2026-03-02T09:00:00-07:00",
+      "summary": "Lunch with Sarah",
+      "description": "Lunch with Sarah at 12:30 p.m. at Sushi House.",
+      "location": "Sushi House, 123 Castro St, Mountain View",
+      "creator": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "organizer": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "start": {
+        "dateTime": "2026-03-11T12:30:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      },
+      "end": {
+        "dateTime": "2026-03-11T13:30:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      }
+    },
+    {
+      "kind": "calendar#event",
+      "etag": "\"3300123456789000002\"",
+      "id": "evt-dinner-mom",
+      "status": "confirmed",
+      "htmlLink": "https://www.google.com/calendar/event?eid=ZXZ0LWRpbm5lci1tb20",
+      "created": "2026-03-03T10:00:00-07:00",
+      "updated": "2026-03-03T10:00:00-07:00",
+      "summary": "Dinner with Mom",
+      "description": "Dinner with mom at 6:30 p.m. at Olive Garden.",
+      "location": "Olive Garden, 456 El Camino Real, Palo Alto",
+      "creator": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "organizer": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "start": {
+        "dateTime": "2026-03-11T18:30:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      },
+      "end": {
+        "dateTime": "2026-03-11T20:30:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      }
+    },
+    {
+      "kind": "calendar#event",
+      "etag": "\"3300123456789000003\"",
+      "id": "evt-dentist",
+      "status": "confirmed",
+      "htmlLink": "https://www.google.com/calendar/event?eid=ZXZ0LWRlbnRpc3Q",
+      "created": "2026-03-04T11:00:00-07:00",
+      "updated": "2026-03-04T11:00:00-07:00",
+      "summary": "Dentist appointment",
+      "description": "Dentist appointment at 10 a.m. at Smile Dental, Berkeley.",
+      "location": "Smile Dental, 789 University Ave, Berkeley",
+      "creator": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "organizer": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "start": {
+        "dateTime": "2026-03-12T10:00:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      },
+      "end": {
+        "dateTime": "2026-03-12T11:00:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      }
+    },
+    {
+      "kind": "calendar#event",
+      "etag": "\"3300123456789000004\"",
+      "id": "evt-1-1-manager",
+      "status": "confirmed",
+      "htmlLink": "https://www.google.com/calendar/event?eid=ZXZ0LTEtMS1tYW5hZ2Vy",
+      "created": "2026-03-05T08:00:00-07:00",
+      "updated": "2026-03-05T08:00:00-07:00",
+      "summary": "1:1 with Manager",
+      "description": "1:1 with manager at 2 p.m.",
+      "creator": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "organizer": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "start": {
+        "dateTime": "2026-03-12T14:00:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      },
+      "end": {
+        "dateTime": "2026-03-12T14:30:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      }
+    },
+    {
+      "kind": "calendar#event",
+      "etag": "\"3300123456789000005\"",
+      "id": "evt-lunch-alex",
+      "status": "confirmed",
+      "htmlLink": "https://www.google.com/calendar/event?eid=ZXZ0LWx1bmNoLWFsZXg",
+      "created": "2026-03-06T09:00:00-07:00",
+      "updated": "2026-03-06T09:00:00-07:00",
+      "summary": "Lunch with Alex",
+      "description": "Lunch with Alex at noon at In-N-Out.",
+      "location": "In-N-Out Burger, 100 W San Carlos St, San Jose",
+      "creator": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "organizer": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "start": {
+        "dateTime": "2026-03-12T12:00:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      },
+      "end": {
+        "dateTime": "2026-03-12T13:00:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      }
+    },
+    {
+      "kind": "calendar#event",
+      "etag": "\"3300123456789000006\"",
+      "id": "evt-doctor",
+      "status": "confirmed",
+      "htmlLink": "https://www.google.com/calendar/event?eid=ZXZ0LWRvY3Rvci",
+      "created": "2026-03-07T07:00:00-07:00",
+      "updated": "2026-03-07T07:00:00-07:00",
+      "summary": "Doctor appointment",
+      "description": "Doctor appointment at 8:30 a.m. at Kaiser Permanente.",
+      "location": "Kaiser Permanente, 900 Kiely Blvd, Santa Clara",
+      "creator": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "organizer": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "start": {
+        "dateTime": "2026-03-13T08:30:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      },
+      "end": {
+        "dateTime": "2026-03-13T09:15:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      }
+    },
+    {
+      "kind": "calendar#event",
+      "etag": "\"3300123456789000007\"",
+      "id": "evt-yoga",
+      "status": "confirmed",
+      "htmlLink": "https://www.google.com/calendar/event?eid=ZXZ0LXlvZ2E",
+      "created": "2026-03-08T16:00:00-07:00",
+      "updated": "2026-03-08T16:00:00-07:00",
+      "summary": "Yoga class",
+      "description": "Yoga class at 5:30 p.m. at CorePower Yoga, SF.",
+      "location": "CorePower Yoga, 200 California St, San Francisco",
+      "creator": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "organizer": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "start": {
+        "dateTime": "2026-03-13T17:30:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      },
+      "end": {
+        "dateTime": "2026-03-13T18:30:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      }
+    },
+    {
+      "kind": "calendar#event",
+      "etag": "\"3300123456789000008\"",
+      "id": "evt-coffee-jen",
+      "status": "confirmed",
+      "htmlLink": "https://www.google.com/calendar/event?eid=ZXZ0LWNvZmZlZS1qZW4",
+      "created": "2026-03-09T09:00:00-07:00",
+      "updated": "2026-03-09T09:00:00-07:00",
+      "summary": "Coffee with Jen",
+      "description": "Coffee with Jen at 10 a.m. at Philz, Sunnyvale.",
+      "location": "Philz Coffee, 321 S Mathilda Ave, Sunnyvale",
+      "creator": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "organizer": {
+        "email": "user@example.com",
+        "displayName": "User",
+        "self": true
+      },
+      "start": {
+        "dateTime": "2026-03-14T10:00:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      },
+      "end": {
+        "dateTime": "2026-03-14T10:45:00-07:00",
+        "timeZone": "America/Los_Angeles"
+      }
+    }
+  ]
+}
