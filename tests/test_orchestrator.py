@@ -100,6 +100,30 @@ def test_calendar_single_match_returns_recommendation() -> None:
     assert rec.departure_time is not None
 
 
+def test_calendar_single_match_without_arrival_defaults_to_event_start() -> None:
+    """If arrival constraints are missing, calendar-event commute defaults arrival_time to event start."""
+    now = _tz(datetime(2026, 3, 12, 8, 0))
+    intent = CommuteIntent(
+        intent="commute_plan",
+        origin_source="home",
+        destination_source="calendar_event",
+        destination_text=None,
+        event_query="dentist",
+        origin_text=None,
+        arrival_time=None,
+        arrival_window_start=None,
+        arrival_window_end=None,
+        risk_mode="balanced",
+        missing_fields=[],
+    )
+    orchestrator = SimpleOrchestrator(now_provider=lambda: now)
+    result = orchestrator.run_with_intent(intent)
+
+    assert result.recommendation is not None
+    assert result.needs_arrival_info_message is None
+    assert result.recommendation.departure_time is not None
+
+
 def test_calendar_ambiguous_returns_clarification_candidates() -> None:
     """Event query matching multiple events (e.g. 'lunch') -> clarification_candidates."""
     now = _tz(datetime(2026, 3, 11, 9, 0))
