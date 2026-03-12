@@ -1,0 +1,59 @@
+{
+  "routes": [
+    {
+      "origin_key": "ChIJk1UlJffGj4AR-7kpSYyI4Ag",
+      "destination_key": "ChIJwVpbIqK5j4ARTSu3RuPzCAk",
+      "duration_minutes": 35.0
+    },
+    {
+      "origin_key": "ChIJwVpbIqK5j4ARTSu3RuPzCAk",
+      "destination_key": "ChIJk1UlJffGj4AR-7kpSYyI4Ag",
+      "duration_minutes": 40.0
+    },
+    {
+      "origin_key": "ChIJk1UlJffGj4AR-7kpSYyI4Ag",
+      "destination_key": "Sushi House, 123 Castro St, Mountain View",
+      "duration_minutes": 28.0
+    },
+    {
+      "origin_key": "ChIJk1UlJffGj4AR-7kpSYyI4Ag",
+      "destination_key": "Olive Garden, 456 El Camino Real, Palo Alto",
+      "duration_minutes": 32.0
+    },
+    {
+      "origin_key": "ChIJk1UlJffGj4AR-7kpSYyI4Ag",
+      "destination_key": "Smile Dental, 789 University Ave, Berkeley",
+      "duration_minutes": 48.0
+    },
+    {
+      "origin_key": "ChIJk1UlJffGj4AR-7kpSYyI4Ag",
+      "destination_key": "1:1 with Manager",
+      "duration_minutes": 35.0
+    },
+    {
+      "origin_key": "ChIJk1UlJffGj4AR-7kpSYyI4Ag",
+      "destination_key": "In-N-Out Burger, 100 W San Carlos St, San Jose",
+      "duration_minutes": 38.0
+    },
+    {
+      "origin_key": "ChIJk1UlJffGj4AR-7kpSYyI4Ag",
+      "destination_key": "Kaiser Permanente, 900 Kiely Blvd, Santa Clara",
+      "duration_minutes": 22.0
+    },
+    {
+      "origin_key": "ChIJk1UlJffGj4AR-7kpSYyI4Ag",
+      "destination_key": "CorePower Yoga, 200 California St, San Francisco",
+      "duration_minutes": 52.0
+    },
+    {
+      "origin_key": "ChIJk1UlJffGj4AR-7kpSYyI4Ag",
+      "destination_key": "Philz Coffee, 321 S Mathilda Ave, Sunnyvale",
+      "duration_minutes": 26.0
+    },
+    {
+      "origin_key": "ChIJk1UlJffGj4AR-7kpSYyI4Ag",
+      "destination_key": "Team standup",
+      "duration_minutes": 35.0
+    }
+  ]
+}

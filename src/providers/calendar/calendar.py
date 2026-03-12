@@ -15,7 +15,8 @@ from typing import Any, List, Optional, Protocol, Sequence
 
 from src.schemas import CalendarEvent, EventResolutionResult
 from src.time_utils import ensure_timezone
-from src.providers.event_resolver import EventResolver
+
+from src.providers.calendar.event_resolver import EventResolver
 
 
 def _parse_google_start_end(
@@ -134,7 +135,8 @@ class MockCalendarProvider:
         if events is not None:
             self._events = list(events)
         else:
-            path = events_path or Path(__file__).resolve().parent.parent.parent / "data" / "calendar_events.json"
+            # Project root: src/providers/calendar/calendar.py -> 4 levels up
+            path = events_path or Path(__file__).resolve().parent.parent.parent.parent / "data" / "calendar_events.json"
             self._events = self._load_from_path(path)
         self._resolver = resolver if resolver is not None else EventResolver()
 

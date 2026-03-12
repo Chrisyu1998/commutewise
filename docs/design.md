@@ -3,7 +3,7 @@
 **Author:** Chris Yu  
 **Status:** Draft  
 **Date:** March 7, 2026  
-**Last updated:** March 11, 2026 — Calendar provider (EventResolutionResult, EventResolver, clarification flow), event→PlaceRef (destination helper).
+**Last updated:** March 11, 2026 — Provider package layout (`providers/calendar/`, `providers/maps/`); EventResolver under calendar; event→PlaceRef (destination helper).
 
 ---
 
@@ -396,6 +396,8 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 
 **Provider variants:** `MockCalendarProvider`, `GoogleCalendarProvider`
 
+**Package layout:** Calendar provider code lives under **`src/providers/calendar/`**: `calendar.py` (protocol + MockCalendarProvider + `normalize_google_event`), `event_resolver.py` (EventResolver + lexical helpers). Tests live under **`tests/providers/calendar/`**. The top-level `src/providers/__init__.py` re-exports so `from src.providers import MockCalendarProvider` continues to work.
+
 **Interface:**
 
 - `get_events(start, end)` → `List[CalendarEvent]`: events that overlap the given window, sorted by start.
@@ -403,7 +405,7 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 
 **Shared resolution (EventResolver):**
 
-- Resolution logic is implemented in a shared **EventResolver** component (`src/providers/event_resolver.py`). Both MockCalendarProvider and the future GoogleCalendarProvider delegate `resolve_event` to it (or to an injectable resolver), so behavior is consistent and testable. Week 2 can introduce an embedding-based resolver with the same contract without changing the provider interface.
+- Resolution logic is implemented in a shared **EventResolver** component (`src/providers/calendar/event_resolver.py`). Both MockCalendarProvider and the future GoogleCalendarProvider delegate `resolve_event` to it (or to an injectable resolver), so behavior is consistent and testable. Week 2 can introduce an embedding-based resolver with the same contract without changing the provider interface.
 
 **Event resolution strategy:**
 
@@ -426,6 +428,8 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 - Optionally return route metadata
 
 **Provider variants:** `MockMapsProvider`, `GoogleMapsProvider`
+
+**Package layout:** Maps provider code lives under **`src/providers/maps/`**: `maps.py` (protocol + MockMapsProvider + route fixture loading). Tests live under **`tests/providers/maps/`**. The top-level `src/providers/__init__.py` re-exports so `from src.providers import MockMapsProvider` continues to work.
 
 **Data model:** Maps inputs/outputs use a `PlaceRef` object (label/address/provider ID) rather than raw strings. This keeps place identity stable across providers and historical records, which improves Week 2 retrieval and evaluation.
 
@@ -723,8 +727,8 @@ Evaluate each configuration sequentially to measure component contribution:
 
 - Create repo structure and define schemas (including `EventResolutionResult` for resolution + clarification)
 - Build planner / intent parser
-- Build MockCalendarProvider (get_events, resolve_event → EventResolutionResult) and MockMapsProvider
-- Build shared EventResolver (lexical matching; used by mock and future Google provider)
+- Build MockCalendarProvider (get_events, resolve_event → EventResolutionResult) and MockMapsProvider under `src/providers/calendar/` and `src/providers/maps/` respectively
+- Build shared EventResolver in `src/providers/calendar/event_resolver.py` (lexical matching; used by mock and future Google provider)
 - Add `event_to_place_ref` in `src/destination.py` for calendar-derived destination → PlaceRef
 - Define office default config
 - Implement orchestrator

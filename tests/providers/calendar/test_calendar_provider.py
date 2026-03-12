@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from pathlib import Path
 
 import pytest
 from src.schemas import CalendarEvent, EventResolutionResult
 from src.time_utils import parse_iso
-from src.providers.calendar import MockCalendarProvider, normalize_google_event
-from src.providers.event_resolver import EventResolver, match_score, tokenize
+from src.providers.calendar import (
+    EventResolver,
+    MockCalendarProvider,
+    match_score,
+    normalize_google_event,
+    tokenize,
+)
 
 
 def _evt(
@@ -201,7 +205,8 @@ def test_resolve_event_empty_events_returns_empty() -> None:
 
 def test_load_from_fixture_json() -> None:
     """Default provider loads data/calendar_events.json and returns normalized events."""
-    path = Path(__file__).resolve().parent.parent / "data" / "calendar_events.json"
+    # tests/providers/calendar/test_calendar_provider.py -> 4 levels up to project root
+    path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "calendar_events.json"
     if not path.exists():
         pytest.skip("data/calendar_events.json not found (run from repo root)")
     provider = MockCalendarProvider(events_path=path)
