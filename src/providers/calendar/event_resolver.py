@@ -14,13 +14,30 @@ from typing import List, Sequence
 from src.schemas import CalendarEvent, EventResolutionResult
 
 
+_STOPWORDS = {
+    # Very small set for Week 1 lexical matching.
+    "a",
+    "an",
+    "and",
+    "at",
+    "by",
+    "for",
+    "in",
+    "of",
+    "on",
+    "the",
+    "to",
+    "with",
+}
+
+
 def tokenize(text: str) -> List[str]:
-    """Lowercase and split on non-alphanumeric; filter out empty tokens."""
+    """Lowercase and split on non-alphanumeric; filter out empty tokens and stopwords."""
     normalized = (text or "").lower().strip()
     tokens = []
     for word in normalized.split():
         cleaned = "".join(c for c in word if c.isalnum())
-        if cleaned:
+        if cleaned and cleaned not in _STOPWORDS:
             tokens.append(cleaned)
     return tokens
 

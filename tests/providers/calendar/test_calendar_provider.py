@@ -282,7 +282,7 @@ def test_load_skips_cancelled_events(tmp_path: Path) -> None:
 
 
 def test_tokenize() -> None:
-    assert tokenize("dinner with Mom") == ["dinner", "with", "mom"]
+    assert tokenize("dinner with Mom") == ["dinner", "mom"]
     assert tokenize("  lunch  ") == ["lunch"]
     assert tokenize("") == []
     assert tokenize("1:1") == ["11"]  # non-alphanumeric stripped
