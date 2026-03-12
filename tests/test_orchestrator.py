@@ -118,8 +118,8 @@ def test_calendar_single_match_without_arrival_defaults_to_event_start() -> None
     orchestrator = SimpleOrchestrator(now_provider=lambda: now)
     result = orchestrator.run_with_intent(intent)
 
+    assert result.kind == "recommendation"
     assert result.recommendation is not None
-    assert result.needs_arrival_info_message is None
     assert result.recommendation.departure_time is not None
 
 
