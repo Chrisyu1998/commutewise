@@ -384,6 +384,8 @@ This project is intentionally framed as a **planning-and-recommendation system**
 
 A graph/state-machine structure is significantly easier to debug and evaluate than a single long prompt.
 
+**Missing arrival constraints:** If the parsed intent has no arrival time and no arrival window (e.g. the user asks "When should I leave for the office?" without "between 10 and 11"), the orchestrator does *not* invent a default (such as "arrive by end of next hour"). Instead, Week 1 behavior is to return a structured “needs arrival info” result so the caller can prompt the user with a targeted question like **"What time do you wish to arrive?"** (e.g. “by 10:00” or “between 10 and 11”) and then re-run the flow with the user’s reply. This avoids hidden defaults in orchestration and makes the missing constraint explicit and testable. A future planner or UX layer can still add sensible defaults (e.g. "arrive by event start" or "by end of next hour") when appropriate, but they should be deliberate rather than silent.
+
 ---
 
 ### 9.3 Calendar Provider
@@ -402,6 +404,11 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 
 - `get_events(start, end)` → `List[CalendarEvent]`: events that overlap the given window, sorted by start.
 - `resolve_event(query, events)` → `EventResolutionResult`: candidates and scores for the query. `EventResolutionResult` has `candidates`, `scores`, and `needs_clarification` (true when more than one candidate). This allows the orchestrator to ask "Do you mean X or Y?" and re-call `resolve_event` with the user's reply to get a single event.
+
+**Zero vs. multiple matches (Week 1 behavior):**
+
+- **0 candidates**: the orchestrator returns a user-facing message indicating it **cannot find a related calendar event**, and asks the user to provide **date and location** (so the destination can be treated as explicit on retry, or the calendar time window can be widened).
+- **2+ candidates**: the orchestrator returns a user-facing **disambiguation prompt** like **"Do you mean event X or event Y?"** (constructed from candidate titles) and waits for the user’s reply to re-run `resolve_event`.
 
 **Shared resolution (EventResolver):**
 
@@ -617,12 +624,14 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 
 1. Planner identifies calendar event query (`event_query` e.g. "dinner with Mom").
 2. Orchestrator calls calendar provider `get_events(start, end)`, then `resolve_event(event_query, events)`.
-3. If `EventResolutionResult.needs_clarification` is false and there is one candidate, use that event; set destination via `event_to_place_ref(event)`.
-4. Maps provider returns route ETA for that destination.
-5. History retriever returns similar commute cases.
-6. Recommendation engine computes recommendation.
-7. Validator checks feasibility.
-8. Response generator returns final answer.
+3. If there are **0 candidates**, return a message: **cannot find a related calendar event** and ask the user for **date and location** (then retry as explicit destination or with a wider calendar window).
+4. If `EventResolutionResult.needs_clarification` is true (**2+ candidates**), return a message like **"Do you mean event X or event Y?"** and wait for the user’s reply to re-run event resolution.
+5. If `EventResolutionResult.needs_clarification` is false and there is **exactly 1** candidate, use that event; set destination via `event_to_place_ref(event)`.
+6. Maps provider returns route ETA for that destination.
+7. History retriever returns similar commute cases.
+8. Recommendation engine computes recommendation.
+9. Validator checks feasibility.
+10. Response generator returns final answer.
 
 ### 10.3 Clarification Flow
 
@@ -634,6 +643,17 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 4. User replies (e.g. "Sarah" or "the first one").
 5. Orchestrator calls `resolve_event(user_reply, events)` again; result now has a single candidate.
 6. Normal flow resumes from step 3 of the Calendar Event flow (destination = `event_to_place_ref(chosen_event)`, then Maps, etc.).
+
+### 10.4 No Calendar Match Flow
+
+*"When should I leave for dinner with Mom?" (but the calendar has no matching event, or the query is too vague)*
+
+1. Planner identifies `destination_source="calendar_event"` and sets `event_query`.
+2. Orchestrator calls `get_events` and `resolve_event(event_query, events)`.
+3. If the result has **0 candidates**, the system returns: **"We cannot find a related calendar event. You can let me know the date and location."**
+4. The user provides a **date/time and location**, and the caller re-runs the flow using either:
+   - an explicit destination (address/label), or
+   - an updated `event_query` and/or a wider calendar time window.
 
 ---
 

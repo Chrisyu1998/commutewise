@@ -1,28 +1,262 @@
 """
-Orchestrator.
+Orchestrator: minimal Week 1 implementation.
 
-Wires planner → providers → recommendation → validation → response generation.
-Mock-first and CLI-first for Week 1.
+Takes a parsed or simple input (CommuteIntent), resolves office or calendar
+destination, calls mock calendar/maps providers, runs the recommendation engine,
+and returns a structured result (Recommendation or clarification needed).
 
-The concrete implementation will:
-- Accept configuration (e.g. an `AppConfig` from `src.config`) in its
-  constructor so that office/home defaults and timezone are explicit.
-- Use helpers from `src.time_utils` to normalize all planner-produced
-  datetimes into timezone-aware values.
-
-No implementation is included in the scaffold.
+No graph framework; linear flow. No LLM; intent is supplied by caller or a
+rule-based planner. Readable and testable.
 """
 
 from __future__ import annotations
 
-from typing import Protocol
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Callable, List, Optional, Protocol
 
-from src.schemas import CommuteRequest, Recommendation
+from src.config import AppConfig, default_app_config
+from src.destination import event_to_place_ref
+from src.schemas import (
+    CalendarEvent,
+    CommuteIntent,
+    CommuteRequest,
+    PlaceRef,
+    Recommendation,
+    ResolvedCommute,
+)
+from src.time_utils import ensure_timezone
+
+from src.providers.maps import MapsProvider
+
+
+def _format_clarification_message(candidates: list[CalendarEvent]) -> str:
+    """Build user-facing 'Do you mean X or Y?' message from candidate event titles."""
+    titles = [e.title for e in candidates]
+    if len(titles) == 1:
+        return f"Do you mean {titles[0]}?"
+    if len(titles) == 2:
+        return f"Do you mean {titles[0]} or {titles[1]}?"
+    # "Do you mean A, B, or C?"
+    return "Do you mean " + ", ".join(titles[:-1]) + ", or " + titles[-1] + "?"
+
+
+NO_EVENT_FOUND_MESSAGE = (
+    "We cannot find a related calendar event. You can let me know the date and location."
+)
+
+NEEDS_ARRIVAL_INFO_MESSAGE = (
+    "What time do you wish to arrive? (e.g. 'by 10:00' or 'between 10 and 11')"
+)
+
+
+@dataclass
+class OrchestratorResult:
+    """
+    Structured result from the orchestrator.
+
+    Exactly one of recommendation, clarification_candidates, no_event_found_message,
+    or needs_arrival_info_message is set.
+    - recommendation: success path; return this to the user.
+    - clarification_candidates + clarification_message: calendar had multiple matches;
+      show clarification_message (e.g. "Do you mean X or Y?") and re-run with user reply.
+    - no_event_found_message: no calendar event matched; show message and suggest date/location.
+    - needs_arrival_info_message: destination is resolved but arrival time/window is missing;
+      show message (e.g. "What time do you wish to arrive?") so the user can reply and re-run.
+    """
+
+    recommendation: Optional[Recommendation] = None
+    clarification_candidates: Optional[list[CalendarEvent]] = None
+    clarification_message: Optional[str] = None
+    no_event_found_message: Optional[str] = None
+    needs_arrival_info_message: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        has_rec = self.recommendation is not None
+        has_clar = self.clarification_candidates is not None
+        has_no_event = self.no_event_found_message is not None
+        has_needs_arrival = self.needs_arrival_info_message is not None
+        if sum([has_rec, has_clar, has_no_event, has_needs_arrival]) != 1:
+            raise ValueError(
+                "OrchestratorResult: set exactly one of recommendation, "
+                "clarification_candidates, no_event_found_message, or needs_arrival_info_message"
+            )
 
 
 class Orchestrator(Protocol):
-    """End-to-end entrypoint from request to recommendation."""
+    """End-to-end entrypoint from request to structured result."""
 
-    def run(self, request: CommuteRequest) -> Recommendation:
-        """Return a final, validated recommendation for a request."""
+    def run(self, request: CommuteRequest) -> OrchestratorResult:
+        """Parse request, resolve destination, recommend; return result or clarification needed."""
 
+    def run_with_intent(self, intent: CommuteIntent) -> OrchestratorResult:
+        """Run with an already-parsed intent (e.g. from tests or a planner)."""
+
+
+def _default_now() -> datetime:
+    """Current time in default timezone (for event window and tests)."""
+    from src.config import DEFAULT_TIMEZONE
+
+    return ensure_timezone(datetime.now(), DEFAULT_TIMEZONE)
+
+
+class SimpleOrchestrator:
+    """
+    Minimal Week 1 orchestrator: linear flow, no graph, no LLM.
+
+    - Resolves origin (home from config) and destination (office config or
+      calendar event or explicit text).
+    - Calls calendar provider for get_events + resolve_event when destination
+      is calendar_event.
+    - Calls maps provider for ETA.
+    - Calls recommendation engine; returns Recommendation or clarification.
+    """
+
+    def __init__(
+        self,
+        config: Optional[AppConfig] = None,
+        *,
+        calendar_provider: Optional["CalendarProvider"] = None,
+        maps_provider: Optional[MapsProvider] = None,
+        recommendation_engine: Optional["RecommendationEngine"] = None,
+        now_provider: Optional[Callable[[], datetime]] = None,
+        planner: Optional["Planner"] = None,
+    ) -> None:
+        from src.providers import MockCalendarProvider, MockMapsProvider
+        from src.recommendation import SimpleRecommendationEngine
+
+        self._config = config or default_app_config()
+        self._calendar = calendar_provider or MockCalendarProvider()
+        self._maps = maps_provider or MockMapsProvider()
+        self._engine = recommendation_engine or SimpleRecommendationEngine(
+            now_provider=now_provider
+        )
+        self._now = now_provider or _default_now
+        self._planner = planner  # Optional: for run(request)
+
+    def run(self, request: CommuteRequest) -> OrchestratorResult:
+        """Parse request with planner (if set), then run with intent."""
+        if self._planner is None:
+            raise ValueError(
+                "SimpleOrchestrator.run(request) requires a planner; "
+                "use run_with_intent(intent) for pre-parsed input, or inject a planner."
+            )
+        intent = self._planner.parse(request)
+        return self.run_with_intent(intent)
+
+    def run_with_intent(self, intent: CommuteIntent) -> OrchestratorResult:
+        """
+        Resolve destination, get ETA, run recommendation engine; return result.
+
+        - Office: use config.office.place.
+        - Calendar event: get_events(start, end), resolve_event(query, events);
+          if one candidate → use it; if multiple → return clarification_candidates.
+        - Explicit: PlaceRef from intent.destination_text.
+        """
+        origin = self._resolve_origin(intent)
+        destination, event = self._resolve_destination(intent)
+        if destination is None:
+            # No candidates or multiple candidates (calendar only)
+            if isinstance(event, list):
+                if len(event) == 0:
+                    return OrchestratorResult(
+                        no_event_found_message=NO_EVENT_FOUND_MESSAGE
+                    )
+                return OrchestratorResult(
+                    clarification_candidates=event,
+                    clarification_message=_format_clarification_message(event),
+                )
+            raise AssertionError("destination None but event is not a list")
+
+        route = self._get_route(origin, destination)
+        chosen_event: Optional[CalendarEvent] = (
+            event if isinstance(event, CalendarEvent) else None
+        )
+        # If arrival time/window is missing, ask the user instead of calling the engine.
+        has_arrival_time = intent.arrival_time is not None
+        has_arrival_window = (
+            intent.arrival_window_start is not None
+            and intent.arrival_window_end is not None
+        )
+        if not has_arrival_time and not has_arrival_window:
+            return OrchestratorResult(
+                needs_arrival_info_message=NEEDS_ARRIVAL_INFO_MESSAGE
+            )
+        commute = ResolvedCommute(
+            origin=origin,
+            destination=destination,
+            event=chosen_event,
+            route=route,
+            arrival_time=intent.arrival_time,
+            arrival_window_start=intent.arrival_window_start,
+            arrival_window_end=intent.arrival_window_end,
+            risk_mode=intent.risk_mode,
+        )
+        recommendation = self._engine.recommend(commute)
+        return OrchestratorResult(recommendation=recommendation)
+
+    def _resolve_origin(self, intent: CommuteIntent) -> PlaceRef:
+        """Resolve origin to a PlaceRef; Week 1 defaults to home."""
+        if intent.origin_source == "home":
+            return self._config.home.place
+        if intent.origin_source == "office":
+            return self._config.office.place
+        # explicit: use origin_text as label/address
+        return PlaceRef(
+            label=intent.origin_text,
+            address=intent.origin_text,
+            provider_place_id=None,
+        )
+
+    def _resolve_destination(
+        self, intent: CommuteIntent
+    ) -> tuple[Optional[PlaceRef], Optional[CalendarEvent] | List[CalendarEvent]]:
+        """
+        Resolve destination from intent.
+
+        Returns (PlaceRef, event_or_none) or (None, list[CalendarEvent]).
+        When calendar has multiple candidates, returns (None, candidates)
+        for clarification.
+        """
+        if intent.destination_source == "office":
+            return (self._config.office.place, None)
+        if intent.destination_source == "explicit":
+            return (
+                PlaceRef(
+                    label=intent.destination_text,
+                    address=intent.destination_text,
+                    provider_place_id=None,
+                ),
+                None,
+            )
+        if intent.destination_source != "calendar_event" or not intent.event_query:
+            raise ValueError(
+                "Intent destination_source is calendar_event but event_query is missing."
+            )
+
+        now = self._now()
+        start = now
+        end = now + timedelta(days=7)
+        events = self._calendar.get_events(start, end)
+        result = self._calendar.resolve_event(intent.event_query, events)
+
+        if not result.candidates:
+            return (None, [])
+        if result.needs_clarification:
+            return (None, result.candidates)
+
+        chosen = result.candidates[0]
+        return (event_to_place_ref(chosen), chosen)
+
+    def _get_route(self, origin: PlaceRef, destination: PlaceRef):
+        """Get route ETA from maps provider."""
+        return self._maps.get_eta(origin, destination)
+
+
+# Optional type-only imports to avoid circular imports at runtime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.planner import Planner
+    from src.providers.calendar import CalendarProvider
+    from src.recommendation import RecommendationEngine
