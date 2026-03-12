@@ -47,11 +47,11 @@ def main() -> int:
         help="Natural-language query, e.g. 'When should I leave for the office between 10 and 11?'",
     )
     args = parser.parse_args()
-    query = (args.query or "").strip()
-    if not query:
+    base_query = (args.query or "").strip()
+    if not base_query:
         # Minimal interactive mode when no CLI arg is provided.
-        query = input("Ask CommuteWise: ").strip()
-        if not query:
+        base_query = input("Ask CommuteWise: ").strip()
+        if not base_query:
             return 0
 
     planner = RuleBasedPlanner()
@@ -59,6 +59,7 @@ def main() -> int:
 
     # Week 1 demo loop: allow up to two follow-ups (clarification, then arrival time).
     # This keeps the CLI small while still demonstrating the full flow.
+    query = base_query
     for _ in range(3):
         request = CommuteRequest(query=query)
         try:
@@ -77,9 +78,9 @@ def main() -> int:
             reply = input("> ").strip()
             if not reply:
                 return 0
-            # Minimal approach: rerun using the user's reply as the event query.
-            # The RuleBasedPlanner treats this as an event query unless it contains "office".
-            query = reply
+            # Minimal approach: keep the original request and append the user's disambiguation.
+            # This preserves context like "leave for lunch" instead of replacing it with "Sarah".
+            query = f"{base_query} {reply}".strip()
             continue
 
         if result.no_event_found_message is not None:
@@ -91,9 +92,9 @@ def main() -> int:
             reply = input("> ").strip()
             if not reply:
                 return 0
-            # Minimal approach: append the arrival constraint to the original query.
-            # Example: "office" + "between 10 and 11".
-            query = f"{query} {reply}".strip()
+            # Minimal approach: append the arrival constraint to the original query (not the
+            # already-mutated query) to avoid compounding multiple follow-up responses.
+            query = f"{base_query} {reply}".strip()
             continue
 
         return 1
