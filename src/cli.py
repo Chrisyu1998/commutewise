@@ -68,13 +68,12 @@ def main() -> int:
             print(f"Error: {e}", file=sys.stderr)
             return 1
 
-        if result.recommendation is not None:
+        if result.kind == "recommendation":
             _print_recommendation(result)
             return 0
 
-        if result.clarification_candidates is not None:
-            msg = result.clarification_message or "Which event do you mean?"
-            print(msg)
+        if result.kind == "clarification":
+            print(result.clarification_message)
             reply = input("> ").strip()
             if not reply:
                 return 0
@@ -83,12 +82,12 @@ def main() -> int:
             query = f"{base_query} {reply}".strip()
             continue
 
-        if result.no_event_found_message is not None:
-            print(result.no_event_found_message)
+        if result.kind == "no_event_found":
+            print(result.message)
             return 0
 
-        if result.needs_arrival_info_message is not None:
-            print(result.needs_arrival_info_message)
+        if result.kind == "needs_arrival_info":
+            print(result.message)
             reply = input("> ").strip()
             if not reply:
                 return 0

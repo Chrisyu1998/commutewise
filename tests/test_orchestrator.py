@@ -32,15 +32,14 @@ def _tz(dt: datetime) -> datetime:
 
 
 def test_orchestrator_result_requires_exactly_one_field() -> None:
-    with pytest.raises(ValueError, match="exactly one"):
-        OrchestratorResult()
-    with pytest.raises(ValueError, match="exactly one"):
-        OrchestratorResult(
-            recommendation=None,
-            clarification_candidates=None,
-            no_event_found_message=None,
-            needs_arrival_info_message=None,
-        )
+    with pytest.raises(ValueError):
+        OrchestratorResult(kind="recommendation", recommendation=None)
+    with pytest.raises(ValueError):
+        OrchestratorResult(kind="clarification", clarification_candidates=[], clarification_message=None)
+    with pytest.raises(ValueError):
+        OrchestratorResult(kind="no_event_found", message=None)
+    with pytest.raises(ValueError):
+        OrchestratorResult(kind="needs_arrival_info", message=None)
 
 
 def test_office_commute_run_with_intent_returns_recommendation() -> None:
@@ -64,8 +63,8 @@ def test_office_commute_run_with_intent_returns_recommendation() -> None:
     orchestrator = SimpleOrchestrator(now_provider=lambda: now)
     result = orchestrator.run_with_intent(intent)
 
+    assert result.kind == "recommendation"
     assert result.recommendation is not None
-    assert result.clarification_candidates is None
     rec = result.recommendation
     assert rec.departure_time is not None
     # ETA 35 min (fixture), balanced buffer 10; balanced targets middle of window (10:30) -> leave 09:45
@@ -94,8 +93,8 @@ def test_calendar_single_match_returns_recommendation() -> None:
     orchestrator = SimpleOrchestrator(now_provider=lambda: now)
     result = orchestrator.run_with_intent(intent)
 
+    assert result.kind == "recommendation"
     assert result.recommendation is not None
-    assert result.clarification_candidates is None
     rec = result.recommendation
     assert rec.departure_time is not None
 
@@ -145,12 +144,11 @@ def test_calendar_ambiguous_returns_clarification_candidates() -> None:
     # because resolve_event returns multiple candidates first.
     result = orchestrator.run_with_intent(intent)
 
-    assert result.recommendation is None
+    assert result.kind == "clarification"
     assert result.clarification_candidates is not None
     titles = [e.title for e in result.clarification_candidates]
     assert "Lunch with Sarah" in titles
     assert "Lunch with Alex" in titles
-    assert result.clarification_message is not None
     assert "Do you mean" in result.clarification_message
     assert "Lunch with Sarah" in result.clarification_message
     assert "Lunch with Alex" in result.clarification_message
@@ -174,6 +172,7 @@ def test_run_with_planner_office_between_10_and_11() -> None:
     )
     result = orchestrator.run(request)
 
+    assert result.kind == "recommendation"
     assert result.recommendation is not None
     assert result.recommendation.departure_time.hour == 9
     assert result.recommendation.departure_time.minute == 45
@@ -205,12 +204,9 @@ def test_office_no_arrival_returns_needs_arrival_info_message() -> None:
     orchestrator = SimpleOrchestrator(now_provider=lambda: now)
     result = orchestrator.run_with_intent(intent)
 
-    assert result.recommendation is None
-    assert result.clarification_candidates is None
-    assert result.no_event_found_message is None
-    assert result.needs_arrival_info_message is not None
-    assert result.needs_arrival_info_message == NEEDS_ARRIVAL_INFO_MESSAGE
-    assert "What time do you wish to arrive" in result.needs_arrival_info_message
+    assert result.kind == "needs_arrival_info"
+    assert result.message == NEEDS_ARRIVAL_INFO_MESSAGE
+    assert "What time do you wish to arrive" in result.message
 
 
 def test_calendar_zero_candidates_returns_no_event_found_message() -> None:
@@ -236,8 +232,6 @@ def test_calendar_zero_candidates_returns_no_event_found_message() -> None:
     )
     result = orchestrator.run_with_intent(intent)
 
-    assert result.recommendation is None
-    assert result.clarification_candidates is None
-    assert result.no_event_found_message is not None
-    assert result.no_event_found_message == NO_EVENT_FOUND_MESSAGE
-    assert "date and location" in result.no_event_found_message
+    assert result.kind == "no_event_found"
+    assert result.message == NO_EVENT_FOUND_MESSAGE
+    assert "date and location" in result.message
