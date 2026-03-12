@@ -168,10 +168,6 @@ class SimpleOrchestrator:
                 )
             raise AssertionError("destination None but event is not a list")
 
-        route = self._get_route(origin, destination)
-        chosen_event: Optional[CalendarEvent] = (
-            event if isinstance(event, CalendarEvent) else None
-        )
         # If arrival time/window is missing, ask the user instead of calling the engine.
         has_arrival_time = intent.arrival_time is not None
         has_arrival_window = (
@@ -182,6 +178,11 @@ class SimpleOrchestrator:
             return OrchestratorResult(
                 needs_arrival_info_message=NEEDS_ARRIVAL_INFO_MESSAGE
             )
+
+        route = self._get_route(origin, destination)
+        chosen_event: Optional[CalendarEvent] = (
+            event if isinstance(event, CalendarEvent) else None
+        )
         commute = ResolvedCommute(
             origin=origin,
             destination=destination,
