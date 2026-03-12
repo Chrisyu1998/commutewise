@@ -408,6 +408,7 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 **Zero vs. multiple matches (Week 1 behavior):**
 
 - **0 candidates**: the orchestrator returns a user-facing message indicating it **cannot find a related calendar event**, and asks the user to provide **date and location** (so the destination can be treated as explicit on retry, or the calendar time window can be widened).
+  - Week 1 additionally includes the **searched calendar window** (e.g. "searched 2026-03-11 to 2026-03-18") to make the prompt actionable.
 - **2+ candidates**: the orchestrator returns a user-facing **disambiguation prompt** like **"Do you mean event X or event Y?"** (constructed from candidate titles) and waits for the user’s reply to re-run `resolve_event`.
 
 **Shared resolution (EventResolver):**
@@ -651,6 +652,7 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 1. Planner identifies `destination_source="calendar_event"` and sets `event_query`.
 2. Orchestrator calls `get_events` and `resolve_event(event_query, events)`.
 3. If the result has **0 candidates**, the system returns: **"We cannot find a related calendar event. You can let me know the date and location."**
+   - Week 1 also includes the **searched calendar window** in the message (e.g. "Searched 2026-03-11 to 2026-03-18").
 4. The user provides a **date/time and location**, and the caller re-runs the flow using either:
    - an explicit destination (address/label), or
    - an updated `event_query` and/or a wider calendar time window.

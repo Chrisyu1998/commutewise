@@ -209,5 +209,9 @@ def test_calendar_zero_candidates_returns_no_event_found_message() -> None:
     result = orchestrator.run_with_intent(intent)
 
     assert result.kind == "no_event_found"
-    assert result.message == NO_EVENT_FOUND_MESSAGE
+    assert result.message is not None
+    assert NO_EVENT_FOUND_MESSAGE in result.message
     assert "date and location" in result.message
+    assert "Searched" in result.message
+    assert "2026-03-11" in result.message
+    assert "2026-03-18" in result.message

@@ -40,6 +40,10 @@ def _format_clarification_message(candidates: list[CalendarEvent]) -> str:
     # "Do you mean A, B, or C?"
     return "Do you mean " + ", ".join(titles[:-1]) + ", or " + titles[-1] + "?"
 
+def _format_date_window(start: datetime, end: datetime) -> str:
+    """Format a searched datetime window for user-facing messages."""
+    return f"{start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}"
+
 
 NO_EVENT_FOUND_MESSAGE = (
     "We cannot find a related calendar event. You can let me know the date and location."
@@ -166,14 +170,18 @@ class SimpleOrchestrator:
         - Explicit: PlaceRef from intent.destination_text.
         """
         origin = self._resolve_origin(intent)
-        destination, event = self._resolve_destination(intent)
+        destination, event, calendar_window = self._resolve_destination(intent)
         if destination is None:
             # No candidates or multiple candidates (calendar only)
             if isinstance(event, list):
                 if len(event) == 0:
+                    window_suffix = ""
+                    if calendar_window is not None:
+                        start, end = calendar_window
+                        window_suffix = f" (Searched { _format_date_window(start, end) })"
                     return OrchestratorResult(
                         kind="no_event_found",
-                        message=NO_EVENT_FOUND_MESSAGE,
+                        message=NO_EVENT_FOUND_MESSAGE + window_suffix,
                     )
                 return OrchestratorResult(
                     kind="clarification",
@@ -225,16 +233,20 @@ class SimpleOrchestrator:
 
     def _resolve_destination(
         self, intent: CommuteIntent
-    ) -> tuple[Optional[PlaceRef], Optional[CalendarEvent] | List[CalendarEvent]]:
+    ) -> tuple[
+        Optional[PlaceRef],
+        Optional[CalendarEvent] | List[CalendarEvent],
+        Optional[tuple[datetime, datetime]],
+    ]:
         """
         Resolve destination from intent.
 
-        Returns (PlaceRef, event_or_none) or (None, list[CalendarEvent]).
+        Returns (PlaceRef, event_or_none, None) or (None, list[CalendarEvent], window).
         When calendar has multiple candidates, returns (None, candidates)
         for clarification.
         """
         if intent.destination_source == "office":
-            return (self._config.office.place, None)
+            return (self._config.office.place, None, None)
         if intent.destination_source == "explicit":
             return (
                 PlaceRef(
@@ -242,6 +254,7 @@ class SimpleOrchestrator:
                     address=intent.destination_text,
                     provider_place_id=None,
                 ),
+                None,
                 None,
             )
         if intent.destination_source != "calendar_event" or not intent.event_query:
@@ -256,12 +269,12 @@ class SimpleOrchestrator:
         result = self._calendar.resolve_event(intent.event_query, events)
 
         if not result.candidates:
-            return (None, [])
+            return (None, [], (start, end))
         if result.needs_clarification:
-            return (None, result.candidates)
+            return (None, result.candidates, (start, end))
 
         chosen = result.candidates[0]
-        return (event_to_place_ref(chosen), chosen)
+        return (event_to_place_ref(chosen), chosen, None)
 
     def _get_route(self, origin: PlaceRef, destination: PlaceRef):
         """Get route ETA from maps provider."""
