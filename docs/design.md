@@ -557,6 +557,11 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 
 **Why deterministic:** Departure-time recommendation is correctness-sensitive. The system must not rely on free-form LLM reasoning for scheduling arithmetic.
 
+**Arrival window rules:**
+
+- **Target within window (mode-specific):** Aggressive aims near the end of the window (`window_end - 5` minutes), clamped to `window_start` if the window is shorter than 5 minutes. Balanced aims at the middle; safest aims at `window_start`.
+- **Validity (asymmetric):** For a candidate to be valid with an arrival window, the implied arrival (departure + ETA) must lie in **\[window_start − buffer, window_end\]**. Arriving up to `buffer` minutes early is allowed (so the safest candidate that targets `window_start` and actually arrives at `window_start − buffer` is valid). Arrival after `window_end` is never allowed.
+
 ---
 
 ### 9.9 Guardrail / Validator
