@@ -178,7 +178,7 @@ class SimpleOrchestrator:
                     window_suffix = ""
                     if calendar_window is not None:
                         start, end = calendar_window
-                        window_suffix = f" (Searched { _format_date_window(start, end) })"
+                        window_suffix = f" (Searched {_format_date_window(start, end)})"
                     return OrchestratorResult(
                         kind="no_event_found",
                         message=NO_EVENT_FOUND_MESSAGE + window_suffix,

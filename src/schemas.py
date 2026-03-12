@@ -164,8 +164,10 @@ class EventResolutionResult(BaseModel):
 
     @property
     def needs_clarification(self) -> bool:
-        """True when there is more than one candidate; caller should ask user to disambiguate."""
-        return len(self.candidates) > 1
+        """True when the top two candidates share the same score (genuinely ambiguous)."""
+        if len(self.candidates) <= 1:
+            return False
+        return self.scores[0] == self.scores[1]
 
 
 # -----------------------------------------------------------------------------

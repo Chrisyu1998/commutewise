@@ -3,7 +3,7 @@
 **Author:** Chris Yu  
 **Status:** Draft  
 **Date:** March 7, 2026  
-**Last updated:** March 11, 2026 — Provider package layout (`providers/calendar/`, `providers/maps/`); EventResolver under calendar; event→PlaceRef (destination helper).
+**Last updated:** March 12, 2026 — Gemini-backed planner (`GeminiPlanner` + `GeminiClient`), schema-constrained intent parsing, CLI defaulting to Gemini planner.
 
 ---
 
@@ -343,7 +343,44 @@ This project is intentionally framed as a **planning-and-recommendation system**
 
 **Purpose:** Convert user input into structured intent and extracted fields.
 
-**Example:**
+**Implementation:** The planner is implemented as a protocol (`Planner`) with a Gemini-backed implementation (`GeminiPlanner`) that uses a small Gemini client (`GeminiClient` in `src/providers/gemini/`). The CLI constructs `GeminiPlanner` by default; a legacy `RuleBasedPlanner` exists only for tests and fallback.
+
+**How Gemini is used:**
+
+- `GeminiPlanner` builds:
+  - A **system prompt** describing CommuteWise, the commute-planning domain, and parsing rules.
+  - A **JSON schema** that mirrors the `CommuteIntent` fields plus explicit ambiguity flags.
+- It calls `GeminiClient.generate_structured_intent(system_prompt, user_query, json_schema)`.
+- The Gemini API (via the `google-genai` SDK) returns a **schema-constrained JSON object**, which is:
+  - Parsed into Python types.
+  - Normalized (especially timestamps).
+  - Validated into a typed `CommuteIntent` (the “ParsedIntent” object).
+
+**Schema-constrained output:**
+
+The response schema sent to Gemini is a dictionary using the Gen AI SDK’s types (`STRING`, `BOOLEAN`, `ARRAY`, `OBJECT`) and `nullable` flags. Conceptually it corresponds to:
+
+- `intent: "commute_plan" | "clarification_request"`
+- `origin_source: "home" | "office" | "explicit"`
+- `destination_source: "home" | "office" | "calendar_event" | "explicit"`
+- `origin_text: Optional[str]`
+- `destination_text: Optional[str]`
+- `event_query: Optional[str]`
+- `arrival_time: Optional[str]` (ISO-8601)
+- `arrival_window_start: Optional[str]` / `arrival_window_end: Optional[str]` (ISO-8601)
+- `risk_mode: "aggressive" | "balanced" | "safest"`
+- `missing_fields: list[str]`
+- `destination_ambiguous: bool`
+- `time_ambiguous: bool`
+
+The planner then:
+
+- Parses ISO-8601 strings into **timezone-aware** datetimes using `time_utils.ensure_timezone`.
+- Maps `destination_ambiguous` → `"ambiguous_destination"` in `missing_fields`.
+- Maps `time_ambiguous` → `"ambiguous_time"` in `missing_fields`.
+- Returns a fully-validated `CommuteIntent` instance.
+
+**Example ParsedIntent (calendar event destination):**
 
 *Input:* "When should I leave for dinner with Mom?"
 
@@ -362,6 +399,35 @@ This project is intentionally framed as a **planning-and-recommendation system**
   "missing_fields": []
 }
 ```
+
+**Supported intent patterns:**
+
+- **Office commute queries** — e.g. "When should I leave for the office between 10 and 11?"
+  - `destination_source="office"`, `event_query=null`.
+  - Arrival window populated; `arrival_time=null`.
+- **Event-based queries** — e.g. "When should I leave for dinner with Mom?"
+  - `destination_source="calendar_event"`, `event_query="dinner with Mom"`.
+  - Arrival time/window may be omitted; orchestrator defaults to event start.
+- **Leave-now queries** — e.g. "Should I leave for the office now?", "Is it time to leave for my dentist appointment?"
+  - `intent="commute_plan"`.
+  - `destination_source` inferred from wording (office vs. calendar event).
+  - Gemini **does not** compute "now" as a timestamp; it only expresses the constraint (e.g. arrive by event start), and deterministic logic decides departure time.
+- **Arrival-by queries** — e.g. "I need to arrive by 10", "be there at 9:30".
+  - `arrival_time` set; arrival window fields left `null`.
+- **Arrival-window queries** — e.g. "arrive between 10 and 11".
+  - `arrival_window_start` and `arrival_window_end` set; `arrival_time=null`.
+
+**Ambiguity and missing fields:**
+
+Ambiguity is surfaced explicitly:
+
+- If destination reference is fuzzy (e.g. "When should I leave for lunch?"):
+  - Planner may set `destination_ambiguous=true` → `"ambiguous_destination"` in `missing_fields`.
+  - Combined with `"arrival_time_or_window"` when timing is not specified.
+- If time constraint is fuzzy or absent:
+  - Planner may set `time_ambiguous=true` → `"ambiguous_time"` in `missing_fields`.
+
+Downstream, the orchestrator and CLI use `missing_fields` alongside provider results (e.g. `EventResolutionResult.needs_clarification`) to drive **clarification questions**, not Gemini. Gemini is used only for the initial intent parsing step; clarification prompts and “needs more info” messages are constructed deterministically from structured state.
 
 **Why LLM-based parsing:** Natural-language commute requests are fuzzy and under-specified. This is an appropriate use of a model with schema-constrained output. Rules-only approaches are brittle for fuzzy event names, implicit timing constraints, and leave-now questions.
 

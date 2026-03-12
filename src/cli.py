@@ -17,7 +17,7 @@ import argparse
 import sys
 
 from src.orchestrator import OrchestratorResult, SimpleOrchestrator
-from src.planner import RuleBasedPlanner
+from src.planner import GeminiPlanner, PlannerError, RuleBasedPlanner
 from src.recommendation import RecommendationError
 from src.schemas import CommuteRequest
 from src.providers.maps import UnknownRouteError
@@ -46,6 +46,9 @@ def main() -> int:
         default="",
         help="Natural-language query, e.g. 'When should I leave for the office between 10 and 11?'",
     )
+    # Gemini-backed planner is the default for parsing natural-language
+    # queries. The older rule-based planner is kept only for internal tests
+    # and fallback; it is not exposed as a CLI flag anymore.
     args = parser.parse_args()
     base_query = (args.query or "").strip()
     if not base_query:
@@ -54,7 +57,18 @@ def main() -> int:
         if not base_query:
             return 0
 
-    planner = RuleBasedPlanner()
+    import os
+
+    # Prefer the Gemini-backed planner when an API key is configured; fall
+    # back to the legacy rule-based planner otherwise so the CLI and tests
+    # continue to work in offline or key-less environments.
+    if os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
+        from src.providers.gemini import GeminiClient
+
+        gemini_client = GeminiClient()
+        planner = GeminiPlanner(gemini_client=gemini_client)
+    else:
+        planner = RuleBasedPlanner()
     orchestrator = SimpleOrchestrator(planner=planner)
 
     # Week 1 demo loop: allow up to two follow-ups (clarification, then arrival time).
@@ -64,6 +78,9 @@ def main() -> int:
         request = CommuteRequest(query=query)
         try:
             result = orchestrator.run(request)
+        except PlannerError as e:
+            print(f"Planner error: {e}", file=sys.stderr)
+            return 1
         except (ValueError, UnknownRouteError, RecommendationError) as e:
             print(f"Error: {e}", file=sys.stderr)
             return 1
@@ -83,6 +100,8 @@ def main() -> int:
             continue
 
         if result.kind == "no_event_found":
+            # For missing calendar events, surface the message and exit; the
+            # user can re-run the CLI with more explicit date/location info.
             print(result.message)
             return 0
 
