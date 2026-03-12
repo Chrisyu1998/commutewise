@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Callable, List, Optional, Protocol
+from typing import Callable, List, Literal, Optional, Protocol
 
 from src.config import AppConfig, default_app_config
 from src.destination import event_to_place_ref
@@ -50,37 +50,49 @@ NEEDS_ARRIVAL_INFO_MESSAGE = (
 )
 
 
-@dataclass
+OrchestratorResultKind = Literal[
+    "recommendation",
+    "clarification",
+    "no_event_found",
+    "needs_arrival_info",
+]
+
+
+@dataclass(frozen=True)
 class OrchestratorResult:
     """
-    Structured result from the orchestrator.
+    Tagged result from the orchestrator.
 
-    Exactly one of recommendation, clarification_candidates, no_event_found_message,
-    or needs_arrival_info_message is set.
-    - recommendation: success path; return this to the user.
-    - clarification_candidates + clarification_message: calendar had multiple matches;
-      show clarification_message (e.g. "Do you mean X or Y?") and re-run with user reply.
-    - no_event_found_message: no calendar event matched; show message and suggest date/location.
-    - needs_arrival_info_message: destination is resolved but arrival time/window is missing;
-      show message (e.g. "What time do you wish to arrive?") so the user can reply and re-run.
+    This replaces the "exactly one of N optional fields" pattern with an
+    explicit `kind`, which is easier to extend safely as the orchestration
+    workflow grows.
     """
 
+    kind: OrchestratorResultKind
     recommendation: Optional[Recommendation] = None
     clarification_candidates: Optional[list[CalendarEvent]] = None
     clarification_message: Optional[str] = None
-    no_event_found_message: Optional[str] = None
-    needs_arrival_info_message: Optional[str] = None
+    message: Optional[str] = None
 
     def __post_init__(self) -> None:
-        has_rec = self.recommendation is not None
-        has_clar = self.clarification_candidates is not None
-        has_no_event = self.no_event_found_message is not None
-        has_needs_arrival = self.needs_arrival_info_message is not None
-        if sum([has_rec, has_clar, has_no_event, has_needs_arrival]) != 1:
-            raise ValueError(
-                "OrchestratorResult: set exactly one of recommendation, "
-                "clarification_candidates, no_event_found_message, or needs_arrival_info_message"
-            )
+        if self.kind == "recommendation":
+            if self.recommendation is None:
+                raise ValueError("recommendation result requires recommendation")
+            return
+
+        if self.kind == "clarification":
+            if not self.clarification_candidates:
+                raise ValueError("clarification result requires clarification_candidates")
+            if not self.clarification_message:
+                raise ValueError("clarification result requires clarification_message")
+            return
+
+        if self.kind in ("no_event_found", "needs_arrival_info"):
+            if not self.message:
+                raise ValueError(f"{self.kind} result requires message")
+            return
+
+        raise ValueError(f"Unknown OrchestratorResult kind: {self.kind}")
 
 
 class Orchestrator(Protocol):
@@ -160,9 +172,11 @@ class SimpleOrchestrator:
             if isinstance(event, list):
                 if len(event) == 0:
                     return OrchestratorResult(
-                        no_event_found_message=NO_EVENT_FOUND_MESSAGE
+                        kind="no_event_found",
+                        message=NO_EVENT_FOUND_MESSAGE,
                     )
                 return OrchestratorResult(
+                    kind="clarification",
                     clarification_candidates=event,
                     clarification_message=_format_clarification_message(event),
                 )
@@ -180,7 +194,8 @@ class SimpleOrchestrator:
         )
         if not has_arrival_time and not has_arrival_window:
             return OrchestratorResult(
-                needs_arrival_info_message=NEEDS_ARRIVAL_INFO_MESSAGE
+                kind="needs_arrival_info",
+                message=NEEDS_ARRIVAL_INFO_MESSAGE,
             )
         commute = ResolvedCommute(
             origin=origin,
@@ -193,7 +208,7 @@ class SimpleOrchestrator:
             risk_mode=intent.risk_mode,
         )
         recommendation = self._engine.recommend(commute)
-        return OrchestratorResult(recommendation=recommendation)
+        return OrchestratorResult(kind="recommendation", recommendation=recommendation)
 
     def _resolve_origin(self, intent: CommuteIntent) -> PlaceRef:
         """Resolve origin to a PlaceRef; Week 1 defaults to home."""
