@@ -433,6 +433,20 @@ Downstream, the orchestrator and CLI use `missing_fields` alongside provider res
 
 **Timestamp convention:** Any timestamps produced by the planner (e.g. `arrival_time`, `arrival_window_start/end`) must be **timezone-aware** datetimes. The planner should not perform time arithmetic; it should only interpret user constraints into structured fields.
 
+**Prompting strategy (zero-shot vs few-shot):**
+
+For the planner we deliberately use a **zero-shot, instruction-style prompt** (no embedded examples) plus a strict response schema, rather than few-shot examples. The rationale:
+
+- The intent space is small and well-typed (`CommuteIntent`), so a clear schema + rules is usually sufficient.
+- A shorter, example-free prompt is cheaper and easier to maintain than a large few-shot block.
+- Behavior is easier to reason about and change via schema/logic updates instead of editing many examples.
+- Downstream logic (orchestrator, recommendation engine) is deterministic and correctness-sensitive, so we want the LLM’s role to stay narrowly focused on interpretation, not learned policies.
+
+Trade-offs:
+
+- **Pros:** simpler prompt, lower token costs, easier to keep aligned with schemas and tests.
+- **Cons:** may require later addition of a small number of few-shot examples if evaluation reveals systematic misparses (e.g. subtle distinctions between leave-now vs arrival-by phrasing). That tuning can be added incrementally without changing the overall architecture.
+
 ---
 
 ### 9.2 Orchestrator
