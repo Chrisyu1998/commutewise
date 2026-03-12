@@ -168,27 +168,35 @@ class SimpleOrchestrator:
                 )
             raise AssertionError("destination None but event is not a list")
 
-        # If arrival time/window is missing, ask the user instead of calling the engine.
+        chosen_event: Optional[CalendarEvent] = (
+            event if isinstance(event, CalendarEvent) else None
+        )
+
+        # If arrival time/window is missing:
+        # - For calendar-event destinations, default to arriving by event start time.
+        # - Otherwise, ask the user instead of calling the recommendation engine.
         has_arrival_time = intent.arrival_time is not None
         has_arrival_window = (
             intent.arrival_window_start is not None
             and intent.arrival_window_end is not None
         )
+        inferred_arrival_time: Optional[datetime] = None
         if not has_arrival_time and not has_arrival_window:
-            return OrchestratorResult(
-                needs_arrival_info_message=NEEDS_ARRIVAL_INFO_MESSAGE
-            )
+            if chosen_event is not None:
+                inferred_arrival_time = chosen_event.start
+                has_arrival_time = True
+            else:
+                return OrchestratorResult(
+                    needs_arrival_info_message=NEEDS_ARRIVAL_INFO_MESSAGE
+                )
 
         route = self._get_route(origin, destination)
-        chosen_event: Optional[CalendarEvent] = (
-            event if isinstance(event, CalendarEvent) else None
-        )
         commute = ResolvedCommute(
             origin=origin,
             destination=destination,
             event=chosen_event,
             route=route,
-            arrival_time=intent.arrival_time,
+            arrival_time=intent.arrival_time or inferred_arrival_time,
             arrival_window_start=intent.arrival_window_start,
             arrival_window_end=intent.arrival_window_end,
             risk_mode=intent.risk_mode,

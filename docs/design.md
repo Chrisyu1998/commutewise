@@ -384,7 +384,12 @@ This project is intentionally framed as a **planning-and-recommendation system**
 
 A graph/state-machine structure is significantly easier to debug and evaluate than a single long prompt.
 
-**Missing arrival constraints:** If the parsed intent has no arrival time and no arrival window (e.g. the user asks "When should I leave for the office?" without "between 10 and 11"), the orchestrator does *not* invent a default (such as "arrive by end of next hour"). Instead, Week 1 behavior is to return a structured “needs arrival info” result so the caller can prompt the user with a targeted question like **"What time do you wish to arrive?"** (e.g. “by 10:00” or “between 10 and 11”) and then re-run the flow with the user’s reply. This avoids hidden defaults in orchestration and makes the missing constraint explicit and testable. A future planner or UX layer can still add sensible defaults (e.g. "arrive by event start" or "by end of next hour") when appropriate, but they should be deliberate rather than silent.
+**Missing arrival constraints:** If the parsed intent has no arrival time and no arrival window, the orchestrator does *not* invent a generic default (such as "arrive by end of next hour"). Week 1 behavior is:
+
+- **Calendar-event destination**: default `arrival_time` to the **event start time** (i.e. interpret "leave for dentist" as "arrive by the appointment start").
+- **Office/explicit destination**: return a structured “needs arrival info” result so the caller can prompt the user with a targeted question like **"What time do you wish to arrive?"** (e.g. “by 10:00” or “between 10 and 11”) and then re-run the flow with the user’s reply.
+
+This keeps defaults deliberate and domain-specific (event start), while making missing constraints explicit for non-event commutes.
 
 ---
 
@@ -627,11 +632,12 @@ A graph/state-machine structure is significantly easier to debug and evaluate th
 3. If there are **0 candidates**, return a message: **cannot find a related calendar event** and ask the user for **date and location** (then retry as explicit destination or with a wider calendar window).
 4. If `EventResolutionResult.needs_clarification` is true (**2+ candidates**), return a message like **"Do you mean event X or event Y?"** and wait for the user’s reply to re-run event resolution.
 5. If `EventResolutionResult.needs_clarification` is false and there is **exactly 1** candidate, use that event; set destination via `event_to_place_ref(event)`.
-6. Maps provider returns route ETA for that destination.
-7. History retriever returns similar commute cases.
-8. Recommendation engine computes recommendation.
-9. Validator checks feasibility.
-10. Response generator returns final answer.
+6. If the user did **not** provide an arrival time/window, default `arrival_time` to the **event start time**.
+7. Maps provider returns route ETA for that destination.
+8. History retriever returns similar commute cases.
+9. Recommendation engine computes recommendation.
+10. Validator checks feasibility.
+11. Response generator returns final answer.
 
 ### 10.3 Clarification Flow
 
